@@ -1,7 +1,3 @@
-Here is the Markdown for your `examples.md` file. It includes a brief overview of the repository and a clean table describing exactly what each script does based on the code you provided.
-
-***
-
 ```markdown
 # Script Examples
 
