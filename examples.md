@@ -1,4 +1,3 @@
-```markdown
 # Script Examples
 
 This repository contains a collection of advanced Windows Batch scripts utilizing a custom macro assembly library (`assembly.library.cmd`) to achieve modular, structured, and state-driven logic.
@@ -14,4 +13,3 @@ This repository contains a collection of advanced Windows Batch scripts utilizin
 
 ---
 **Note:** All scripts require the `assembly.library.cmd` file to be present in the environment or working directory to function properly. 
-```
