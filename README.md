@@ -48,6 +48,7 @@ Instructions are executed by wrapping them in standard Batch variable expansion 
 | **`BRK`** | **BR**ea**K**. Immediately terminates the script. |
 | **`NOP`** | **N**o **OP**eration. A structural placeholder that does nothing. |
 #### Future Additions to be implemented
+| :--- | :--- |
 | **`IOC`** | **I**nstantiate **O**bject **C**lass. Executes an external script acting as a class constructor. |
 | **`DOC`** | **D**estruct **O**bject **C**lass. Executes an external script acting as a class constructor. |
 
