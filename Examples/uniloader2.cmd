@@ -46,7 +46,7 @@
 
 :InitNameSpace {
 	:: Internal Config
-		set "uldr.appver=v2.10a"
+		set "uldr.appver=v2.11a"
 		set "uldr.appPath=%~dp0"
 		set "uldr.powerShellExe=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 		set "uldr.stdErr=nul 2>&1"
@@ -152,9 +152,9 @@
 :CheckGumInstalled {
 	:: Check if gum responds
 	%JSR% gum -v > %uldr.stdErr%
-	%CMP% %errorlevel% 0
-		%BEQ% :CheckGumInstalled.True
+	%CMP% %errorlevel% 0		
 		%BNE% :CheckGumInstalled.False
+		%BRA% :CheckGumInstalled.True
 
 	:CheckGumInstalled.True		
 		set "uldr.gumInstalled=True"
@@ -168,8 +168,8 @@
 
 :DisplaySpinner {
 	%CMP% "%uldr.gumInstalled%" "True"
-		%BEQ% :DisplaySpinner.Gum
 		%BNE% :DisplaySpinner.text
+		%BRA% :DisplaySpinner.gum
 
 	:DisplaySpinner.Gum
 		:: dispaly pretty gum spinner for arg2 seconds with arg1 message.
@@ -237,7 +237,7 @@
 	:: Test if Ini FIle Exists
 	%FEX% "%uldr.iniParser%"
 		%BNE% :GetIniKB.NoParser
-		%BEQ% :GetIniKB.GetVal
+		%BRA% :GetIniKB.GetVal
 
 	:: Call external Parser with key and value, return error level, and pipe stdout (return value) to file.
 	:GetIniKB.GetVal
@@ -249,7 +249,7 @@
 
 		%CMP% %uldr.iniError% 0
 			%BNE% :GetIniKB.HandleError
-			%BEQ% :GetIniKB.ReturnResult
+			%BRA% :GetIniKB.ReturnResult
 
 	:GetIniKB.NoParser
 		%JSR% :DisplayMessage "%uldr.error[0005]%"
@@ -383,7 +383,7 @@
 	%CMP% "%uldr.controlTerminal.state%" "Restored"
 		%BEQ% :ControlTerminal.Minimize
 
-	:: ControlTerminal Fallthrough State Safety and warn message
+	:: Exception: ControlTerminal Fallthrough and warn message - invalid argument if we got here.
 	%JSR% :DisplayMessage "%uldr.warn[0001]%"
 	%RTS%
 
@@ -429,12 +429,13 @@
 	%LDX% 0
 
 	:CheckHTTPServerUP.Loop
+		:: Fake gum usage with timer instead. Curl runs for a fraction of a second, we would never see it if we passed curl and args to gum
 		%JSR% :DisplaySpinner "Probing Host: %uldr.ip%:%uldr.port%..." "2"
 		:: Probe HTTP Server and test error output		
 		curl -s -o nul -I -f --max-time 1 http://%uldr.ip%:%uldr.port%
 		%CMP% %errorlevel% 0
 			%BEQ% :CheckHTTPServerUP.True
-			%BNE% :CheckHTTPServerUP.False
+			%BRA% :CheckHTTPServerUP.False
 
 		:CheckHTTPServerUP.True
 			:: Display server Up message, set state and exit
@@ -447,7 +448,7 @@
 			%INX%
 			%CMP% %XR% %uldr.maxTriesHTTP%
 				%BEQ% :CheckHTTPServerUP.Timeout
-				%BNE% :CheckHTTPServerUP.Continue
+				%BRA% :CheckHTTPServerUP.Continue
 
 		:CheckHTTPServerUP.Timeout
 			:: Output timeout error and exit
@@ -466,10 +467,10 @@
 }
 
 :LaunchBrowser {
-	 :: Skip browser if skip  variable set.
+	 :: Skip browser if skip debug variable set to true set.
 	 %CMP% "%uldr.debug%" "True"
 		%BNE% :LaunchBrowser.Try
-		%BEQ% :LaunchBrowser.Skip
+		%BRA% :LaunchBrowser.Skip
 
 	:: Try to launch if server is Up.
 	:LaunchBrowser.Try
