@@ -53,6 +53,12 @@ Instructions are executed by wrapping them in standard Batch variable expansion 
 | **`IOC`** | **I**nstantiate **O**bject **C**lass. Executes an external script acting as a class constructor. |
 | **`DOC`** | **D**estruct **O**bject **C**lass. Executes an external script acting as a class constructor. |
 
+#### Future Additions to be implemented
+| Mnemonic | Description |
+| :--- | :--- |
+| **`IOC`** | **I**nstantiate **O**bject **C**lass. Executes an external script acting as a class constructor. |
+| **`DOC`** | **D**estruct **O**bject **C**lass. Executes an external script acting as a class constructor. |
+
 #### Conditionals (Microcode)
 | Mnemonic | Description |
 | :--- | :--- |
