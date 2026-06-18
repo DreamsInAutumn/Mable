@@ -49,6 +49,7 @@
 		set "uldr.appver=v2.10a"
 		set "uldr.appPath=%~dp0"
 		set "uldr.powerShellExe=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+		set "uldr.stdErr=nul 2>&1"
 
 	:: Ini Parser Config
 		set "uldr.iniParser=%uldr.appPath%bin\iniparser.exe"
@@ -90,17 +91,17 @@
 		set "uldr.msg[0010]=[ INFO ] Loading External App Config..."
 
 		:: Fatal
-		set "uldr.error[0000]=[FATAL ] Error: Valid Application name must be supplied in the shortcut."
-		set "uldr.error[0001]=[FAILED] Timed out waiting for the Application server to start."
-		set "uldr.error[0002]=[FATAL ] Invalid arguments passed to ini Parser."
-		set "uldr.error[0003]=[FATAL ] Ini file was not found."
-		set "uldr.error[0004]=[FATAL ] Ini file Section not found."
-		set "uldr.error[0005]=[FATAL ] Ini file Key not found."
-		set "uldr.error[0006]=[FATAL ] Ini file Parser not found."
+		set "uldr.error[0001]=[FATAL ] Invalid arguments passed to ini Parser."
+		set "uldr.error[0002]=[FATAL ] Ini file was not found."
+		set "uldr.error[0003]=[FATAL ] Ini file Section not found."
+		set "uldr.error[0004]=[FATAL ] Ini file Key not found."
+		set "uldr.error[0005]=[FATAL ] Ini file Parser not found."
 
 		:: Warnings
 		set "uldr.warn[0000]=[ WARN ] invalid Splash State."
 		set "uldr.warn[0001]=[ WARN ] invalid Terminal State."
+		set "uldr.warn[0002]=[FAILED] Timed out waiting for the Application server to start."
+		set "uldr.warn[0003]=[ WARN ] Gum is not installed. Install Gum with: winget install charmbracelet.gum :)..."
 
 		%RTS%
 
@@ -115,25 +116,27 @@
 	%RTS%
 }
 
+
 :: -- Utility Functions
 
 :Delay {
 	timeout /t %1 /nobreak > nul
 	%RTS%
 }
- 
+
 :PauseApp {
 	pause
 	%RTS%
 }
 
-:ShowWelcomeMessage {	
+:DisplayWelcomeMessage {
+	:: Keep _Main tidy (tm)
 	%JSR% :DisplayMessage "%uldr.msg[0000]% %uldr.appver%" NL_Post
 	%RTS%
 }
 
 :Bye {	
-	%JSR% :Delay %uldr.appDelay%
+	%JSR% :Delay %uldr.exitDelay%
 
 	:: Pauses if debug enabled
 	%CMP% %uldr.debug% True
@@ -146,11 +149,44 @@
 	%RTS%
 }
 
+:CheckGumInstalled {
+	:: Check if gum responds
+	%JSR% gum -v > %uldr.stdErr%
+	%CMP% %errorlevel% 0
+		%BEQ% :CheckGumInstalled.True
+		%BNE% :CheckGumInstalled.False
+
+	:CheckGumInstalled.True		
+		set "uldr.gumInstalled=True"
+		%RTS%
+
+	:CheckGumInstalled.False
+		set "uldr.gumInstalled=False"	
+		%JSR% :DisplayMessage "%uldr.warn[0003]%"
+		%RTS%
+}
+
+:DisplaySpinner {
+	%CMP% "%uldr.gumInstalled%" "True"
+		%BEQ% :DisplaySpinner.Gum
+		%BNE% :DisplaySpinner.text
+
+	:DisplaySpinner.Gum
+		:: dispaly pretty gum spinner for arg2 seconds with arg1 message.
+		gum spin --spinner points --title %1 timeout /t %2
+		%RTS%
+
+	:DisplaySpinner.Text
+		<nul set /p="."
+		%JSR% :delay %2
+		%RTS%
+}
+
 :DisplayMessage {
 	:: Preserve flags
 	%PUSHF%
 
-	:: Expand arguments for readability,.
+	:: Expand arguments for readability
 	set "DisplayMessage.msg=%~1"
 	set "DisplayMessage.operation=%~2"
 
@@ -190,6 +226,99 @@
 	:DisplayMessage.Exit
 		:: Restore flags
 		%POPF%
+
+	%RTS%
+}
+
+:: -- Ini file loader
+
+:GetIniKB {
+	:: Reads section (Arg:1) and Key (Arg:2) from a specified ini file, returns its value.
+	:: Test if Ini FIle Exists
+	%FEX% "%uldr.iniParser%"
+		%BNE% :GetIniKB.NoParser
+		%BEQ% :GetIniKB.GetVal
+
+	:: Call external Parser with key and value, return error level, and pipe stdout (return value) to file.
+	:GetIniKB.GetVal
+		:: Clear result before Query.
+    	set "uldr.iniResult="
+    	%JSR% "%uldr.iniParser%" "%uldr.iniFile%" "%1" "%2" > "%TEMP%\uldr_ini_output.tmp"
+		:: Catch stderr from ini parser.
+		set "uldr.iniError=%errorlevel%"
+
+		%CMP% %uldr.iniError% 0
+			%BNE% :GetIniKB.HandleError
+			%BEQ% :GetIniKB.ReturnResult
+
+	:GetIniKB.NoParser
+		%JSR% :DisplayMessage "%uldr.error[0005]%"
+		%JSR% :PauseApp
+		%BRK% 5
+
+	:GetIniKB.HandleError		
+		::	Display IniParser Error, injecting error into the string wiht double %% expansion, delete IniParser temp file, break with exit code.
+		%JSR% :DisplayMessage "%%uldr.error[000%uldr.iniError%]%%"
+		del "%TEMP%\uldr_ini_output.tmp" 2>nul
+		%BRK% %uldr.iniError%
+	
+	:GetIniKB.ReturnResult
+		: Read temp file output from ini parser, store value in result, delete temp file, exit.
+	 	set /p uldr.iniResult=<"%TEMP%\uldr_ini_output.tmp"
+		del "%TEMP%\uldr_ini_output.tmp" 2>nul
+		%RTS%
+
+	:GetIniKB.Exit
+    	%RTS%
+}
+
+
+:LoadUserConfig {
+	:: Loading message
+	%JSR% :DisplayMessage "%uldr.msg[0009]%"
+
+	%JSR% :GetIniKB user browserDelay
+	set "uldr.browserDelay=%uldr.iniResult%"
+
+	%JSR% :GetIniKB user exitDelay
+	set "uldr.exitDelay=%uldr.iniResult%"
+
+	%JSR% :GetIniKB user maxTriesHTTP
+	set "uldr.maxTriesHTTP=%uldr.iniResult%"
+
+	%JSR% :GetIniKB user debug
+	set "uldr.debug=%uldr.iniResult%"
+
+	%JSR% :GetIniKB user controlTerminal.state
+	set "uldr.controlTerminal.state=%uldr.iniResult%"
+	%RTS%
+}
+
+:LoadExternalAppConfig {
+	:: Loading message
+	%JSR% :DisplayMessage "%uldr.msg[0010]%"
+
+	:: loads: AppName, Port, IP, Path, Loader Script, Splash Image, and Browser Arguments
+	%JSR% :GetIniKB %1 AppName
+	set "uldr.appName=%uldr.iniResult%"
+
+	%JSR% :GetIniKB %1 port
+	set "uldr.port=%uldr.iniResult%"
+
+	%JSR% :GetIniKB %1 ip
+	set "uldr.ip=%uldr.iniResult%"
+
+	%JSR% :GetIniKB %1 path
+	set "uldr.path=%uldr.iniResult%"
+
+	%JSR% :GetIniKB %1 loaderScript
+	set "uldr.loaderScript=%uldr.path%\%uldr.iniResult%"
+
+	%JSR% :GetIniKB %1 splashImage
+	set "uldr.splashImage=%uldr.appPath%%uldr.iniResult%"
+
+	%JSR% :GetIniKB %1 browserArgs
+	set "uldr.browserArgs=%uldr.iniResult%"
 
 	%RTS%
 }
@@ -282,7 +411,7 @@
 	:: start msg
 	%JSR% :DisplayMessage "%uldr.msg[0002]%"
 
-	: open app in new terminal tab, then return tab focus back to the first tab.	
+	: open app in new terminal tab, then return tab focus back to the first tab.
 	wt --window 0 -d "%uldr.path%" --title "%uldr.appName%" "%uldr.powerShellExe%" "%uldr.LoaderScript%"
 	wt --window 0 focus-tab --target 0
 
@@ -300,7 +429,8 @@
 	%LDX% 0
 
 	:CheckHTTPServerUP.Loop
-		:: Probe HTTP Server and test error output
+		%JSR% :DisplaySpinner "Probing Host: %uldr.ip%:%uldr.port%..." "2"
+		:: Probe HTTP Server and test error output		
 		curl -s -o nul -I -f --max-time 1 http://%uldr.ip%:%uldr.port%
 		%CMP% %errorlevel% 0
 			%BEQ% :CheckHTTPServerUP.True
@@ -321,13 +451,11 @@
 
 		:CheckHTTPServerUP.Timeout
 			:: Output timeout error and exit
-			%JSR% :DisplayMessage "%uldr.error[0001]%" NL_Pre
+			%JSR% :DisplayMessage "%uldr.warn[0002]%" NL_Pre
 			%BRA% :CheckHTTPServerUP.Exit
 
-		:CheckHTTPServerUP.Continue
-			:: Display moving dot per failed HTTP probe
-			echo|set /p="."
-			%JSR% :delay 1
+		:CheckHTTPServerUP.Continue			
+			%JSR% :DisplaySpinner "Sleeping..." 4
 
 	%BRA% :CheckHTTPServerUP.Loop
 
@@ -366,134 +494,6 @@
 	%RTS%
 }
 
-:ReadIniKV.ErrorHandler {
-	set "uldr.iniError=%1"
-
-	%CMP% %uldr.iniError% 0
-		%BEQ% :ReadIniKV.ErrorHandler.OK
-
-	%CMP% %uldr.iniError% 1
-		%BEQ% :ReadIniKV.ErrorHandler.Arg
-
-	%CMP% %uldr.iniError% 2
-		%BEQ% :ReadIniKV.ErrorHandler.File
-
-	%CMP% %uldr.iniError% 3
-		%BEQ% :ReadIniKV.ErrorHandler.Section
-
-	%CMP% %uldr.iniError% 4
-		%BEQ% :ReadIniKV.ErrorHandler.Key
-
-	%RTS%
-
-	:ReadIniKV.ErrorHandler.OK
-        set /p uldr.iniResult=<"%TEMP%\uldr_ini_output.tmp"
-		%BRA% :ReadIniKV.ErrorHandler.Exit
-
-	:ReadIniKV.ErrorHandler.Arg
-		%JSR% :DisplayMessage "%uldr.error[0002]%" NL_Post
-		%BRA% :ReadIniKV.ErrorHandler.Break
-
-	:ReadIniKV.ErrorHandler.File
-		%JSR% :DisplayMessage "%uldr.error[0003]%" NL_Post
-		%BRA% :ReadIniKV.ErrorHandler.Break
-
-	:ReadIniKV.ErrorHandler.Section
-		%JSR% :DisplayMessage "%uldr.error[0004]%" NL_Post
-		%BRA% :ReadIniKV.ErrorHandler.Break
-
-	:ReadIniKV.ErrorHandler.Key
-		%JSR% :DisplayMessage "%uldr.error[0005]%" NL_Post
-		%BRA% :ReadIniKV.ErrorHandler.Break	
-
-	:ReadIniKV.ErrorHandler.Break
-		del "%TEMP%\uldr_ini_output.tmp" 2>nul
-		%JSR% :PauseApp
-		%BRK%
-
-	:ReadIniKV.ErrorHandler.Exit
-		del "%TEMP%\uldr_ini_output.tmp" 2>nul
-		%RTS%
-}
-
-:ReadIniKV {
-	:: Test if Ini FIle Exists
-	%FEX% "%uldr.iniParser%"
-		%BEQ% :ReadIniKV.Read
-		%BNE% :ReadIniKV.NoParser
-
-	:: Call external Parser with key and value, return error level, and pipe stdout (return value) to file.
-	:ReadIniKV.Read
-		:: Clear Result Before Query
-    	set "uldr.iniResult="
-    	%JSR% "%uldr.iniParser%" "%uldr.iniFile%" "%1" "%2" > "%TEMP%\uldr_ini_output.tmp"
-		%JSR% :ReadIniKV.ErrorHandler %errorlevel%
-		%BRA% :ReadIniKV.Exit
-
-	:ReadIniKV.NoParser
-		%JSR% :DisplayMessage "%uldr.error[0006]%"
-		%JSR% :PauseApp
-		%BRK% 6
-
-	:ReadIniKV.Exit
-    	%RTS%
-}
-
-:LoadUserConfig {
-	:: Loading
-	%JSR% :DisplayMessage "%uldr.msg[0009]%"
-
-	:: Delay before browser starts, allows user to read our console messages briefly.
-	%JSR% :ReadIniKV user browserDelay
-	set "uldr.browserDelay=%uldr.iniResult%"
-
-	:: Delay before exiting.
-	%JSR% :ReadIniKV user appDelay
-	set "uldr.appDelay=%uldr.iniResult%"
-
-	:: Number of retries to check if the HTTP Server is up.
-	%JSR% :ReadIniKV user maxTriesHTTP
-	set "uldr.maxTriesHTTP=%uldr.iniResult%"
-
-	:: Pauses at the end, and disables the Browser Launch.
-	%JSR% :ReadIniKV user debug
-	set "uldr.debug=%uldr.iniResult%"
-
-	:: options: Disabled / Void.
-	%JSR% :ReadIniKV user controlTerminal.state
-	set "uldr.controlTerminal.state=%uldr.iniResult%"
-	%RTS%
-}
-
-:LoadExternalAppConfig {
-	:: Loading Message
-	%JSR% :DisplayMessage "%uldr.msg[0010]%"
-
-	:: loads: AppName, Port, IP, Path, Loader Script, Splash Image, and Browser Arguments
-	%JSR% :ReadIniKV %1 AppName
-	set "uldr.appName=%uldr.iniResult%"
-
-	%JSR% :ReadIniKV %1 port
-	set "uldr.port=%uldr.iniResult%"
-
-	%JSR% :ReadIniKV %1 ip
-	set "uldr.ip=%uldr.iniResult%"
-
-	%JSR% :ReadIniKV %1 path
-	set "uldr.path=%uldr.iniResult%"
-
-	%JSR% :ReadIniKV %1 loaderScript
-	set "uldr.loaderScript=%uldr.path%\%uldr.iniResult%"
-
-	%JSR% :ReadIniKV %1 splashImage
-	set "uldr.splashImage=%uldr.appPath%%uldr.iniResult%"
-
-	%JSR% :ReadIniKV %1 browserArgs
-	set "uldr.browserArgs=%uldr.iniResult%"
-
-	%RTS%
-}
-
 :: -- Main Procedural Function
 
 :_main {
@@ -501,12 +501,11 @@
 
 	%JSR% :InitNameSpace					:: Initialize this.application variable namespace.
 	%JSR% :InitMessageTable LowLevel		:: Initialize Low Level message strings.
-	%JSR% :ShowWelcomeMessage
+	%JSR% :DisplayWelcomeMessage
+	%JSR% :CheckGumInstalled				::
 	%JSR% :LoadExternalAppConfig %1			:: Load configuration variables for specific external HTTP Application.
 	%JSR% :LoadUserConfig					:: Loads user configuration data from the ini file.
-	%JSR% :InitMessageTable Main			:: Initialize Main application message strings.	
-	::%JSR% :LoadUserConfig					:: Loads user configuration data from the ini file.
-
+	%JSR% :InitMessageTable Main			:: Initialize Main application message strings.
 	%JSR% :UpdateSplash	Init				:: Splash State Initialization.
 	%JSR% :ControlTerminal Init				:: Terminal state Initialization.
 
