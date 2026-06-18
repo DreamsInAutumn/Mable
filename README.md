@@ -48,12 +48,6 @@ Instructions are executed by wrapping them in standard Batch variable expansion 
 | **`BRK`** | **BR**ea**K**. Immediately terminates the script. |
 | **`NOP`** | **N**o **OP**eration. A structural placeholder that does nothing. |
 
-#### Future Additions to be implemented
-| Mnemonic | Description |
-| :--- | :--- |
-| **`IOC`** | **I**nstantiate **O**bject **C**lass. Executes an external script acting as a class constructor. |
-| **`DOC`** | **D**estruct **O**bject **C**lass. Executes an external script acting as a class constructor. |
-
 #### Conditionals (Microcode)
 | Mnemonic | Description |
 | :--- | :--- |
@@ -73,6 +67,12 @@ Instructions are executed by wrapping them in standard Batch variable expansion 
 | :--- | :--- |
 | **`PUSHF`** | **PUSH** **F**lags. Saves the current state of all conditional flags and Registers to the stack. |
 | **`POPF`** | **POP** **F**lags. Restores the conditional flags and Registers from the top of the stack. |
+
+#### Future Additions to be implemented
+| Mnemonic | Description |
+| :--- | :--- |
+| **`IOC`** | **I**nstantiate **O**bject **C**lass. Executes an external script acting as a class constructor. |
+| **`DOC`** | **D**estruct **O**bject **C**lass. Executes an external script acting as a class constructor. |
 
 ---
 
