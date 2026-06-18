@@ -247,41 +247,6 @@
 	exit /b
 )
 
-:al.CMP.old (
-	:: Enables conditinal jumps if conditions are met, else sets to a NOP command (REM).
-	call set "JEQ=REM"
-	call set "JNE=REM"
-	call set "JLT=REM"
-	call set "JGT=REM"
-	call set "BEQ=REM"
-	call set "BNE=REM"
-	call set "BLT=REM"
-	call set "BGT=REM"
-
-	:: if a equal b
-	if /i %1 EQU %2 (
-		call set "BEQ=goto"
-		call set "JEQ=call"
-	) else (
-		call set "BNE=goto"
-		call set "JNE=call"
-	)
-
-	:: if a less than b
-	if /i %1 LSS %2 (
-		call set "BLT=goto"
-		call set "JLT=call"
-	)
-
-	:: if a greater than b
-	if /i %1 GTR %2 (
-		call set "BGT=goto"
-		call set "JGT=call"
-	)
-
-	exit /b
-)
-
 :al.CMP (
 	:: Enables conditinal jumps if conditions are met, else sets to a NOP command (REM).
 	call set "JEQ=REM"
@@ -303,13 +268,13 @@
 	)
 
 	:: if a less than b
-	if /i "%~1" EQU "%~2" (
+	if /i "%~1" LSS "%~2" (
 		call set "BLT=goto"
 		call set "JLT=call"
 	)
 
 	:: if a greater than b
-	if /i "%~1" EQU "%~2" (
+	if /i "%~1" GTR "%~2" (
 		call set "BGT=goto"
 		call set "JGT=call"
 	)
