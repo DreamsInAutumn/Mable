@@ -47,6 +47,7 @@ Instructions are executed by wrapping them in standard Batch variable expansion 
 | **`JFR`** | **J**ump **F**a**R**. Launches an external application as an asynchronous background process. |
 | **`BRK`** | **BR**ea**K**. Immediately terminates the script. |
 | **`NOP`** | **N**o **OP**eration. A structural placeholder that does nothing. |
+
 #### Future Additions to be implemented
 | :--- | :--- |
 | **`IOC`** | **I**nstantiate **O**bject **C**lass. Executes an external script acting as a class constructor. |
