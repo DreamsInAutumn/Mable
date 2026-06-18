@@ -11,11 +11,15 @@
 /*
 	AI / IMG Processing / Chat Browser App Loader - (C) 2026 Autumn
 
+	Usage:
+		Create a shortcut to this script + the argument listed in the ini file to load and launch.
+
 	Features:
 		Load desired app in a separate wt tab
 		Windows Terminal - because pretty colored text.
 		Opens App as a Browser stored application without the Browser Chrome, creating a more native application feel.
 		Adds a pretty graphical splash while loading.
+		Tries to adhere to single responsibility and never nesting principles.
 		Could this be done in 5 lines? Yes. Do I care? No.
 */
 
@@ -46,7 +50,7 @@
 		set "uldr.appPath=%~dp0"
 		set "uldr.powerShellExe=C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 
-	:: Ini Parser Comfig
+	:: Ini Parser Config
 		set "uldr.iniParser=%uldr.appPath%bin\iniparser.exe"
     	set "uldr.iniFile=%uldr.appPath%uniloader.ini"
 
@@ -66,7 +70,7 @@
 }
 
 :InitMessageTable {
-	:: LowLevel error messages must be aailable before the data is ready to populate the messages in the Main section.
+	:: LowLevel error messages must be avilable before the data is ready to populate the messages in the Main section.
 	%CMP% %1 LowLevel
 		%BEQ% :InitMessageTable.LowLevel
 
@@ -84,6 +88,7 @@
 		set "uldr.msg[0008]=[ INFO ] Shutdown Splash Application"
 		set "uldr.msg[0009]=[ INFO ] Loading User Config..."
 		set "uldr.msg[0010]=[ INFO ] Loading External App Config..."
+
 		:: Fatal
 		set "uldr.error[0000]=[FATAL ] Error: Valid Application name must be supplied in the shortcut."
 		set "uldr.error[0001]=[FAILED] Timed out waiting for the Application server to start."
@@ -101,11 +106,11 @@
 
 	:InitMessageTable.Main
 		:: Messages		
-		set "uldr.msg[0001]=[  OK  ] %uldr.AppName% server is Up!"
-		set "uldr.msg[0002]=[ INFO ] Starting %uldr.AppName%..."
-		set "uldr.msg[0003]=[ INFO ] Launching %uldr.AppName% browser app..."
-		set "uldr.msg[0004]=[ INFO ] Browser opening disabled. Server available at: http://%uldr.IP%:%uldr.Port%"
-		set "uldr.msg[0005]=[ INFO ] Waiting for %uldr.AppName% server..."
+		set "uldr.msg[0001]=[  OK  ] %uldr.appName% server is Up!"
+		set "uldr.msg[0002]=[ INFO ] Starting %uldr.appName% HTTP server..."
+		set "uldr.msg[0003]=[ INFO ] Launching %uldr.appName% browser app..."
+		set "uldr.msg[0004]=[ INFO ] Browser opening disabled. Server available at: http://%uldr.ip%:%uldr.port%"
+		set "uldr.msg[0005]=[ INFO ] Waiting for %uldr.appName% server..."
 
 	%RTS%
 }
@@ -189,15 +194,15 @@
 	%RTS%
 }
 
-:: -- Core Applicatoin Functions
+:: -- Core Application Functions
 
 :UpdateSplash {
 	::
 	%CMP% "%~1" "init"
-		%BEQ% :UpdateSplash.init
+		%BEQ% :UpdateSplash.Init
 
 	%CMP% %uldr.splash.State% init.Done
-		%BEQ% :UpdateSplash.load
+		%BEQ% :UpdateSplash.Load
 
 	%CMP% %uldr.splash.State% load.Done
 		%BEQ% :UpdateSplash.Display
@@ -233,8 +238,8 @@
 }
 
 :ControlTerminal {
-	:: Is Disbled?, exit if so
-	%CMP% "%uldr.ControlTerminal.state%" "Disabled"
+	:: Is Disabled?, exit if so
+	%CMP% "%uldr.controlTerminal.state%" "Disabled"
 		%BEQ% :ControlTerminal.Exit
 
 	:: State initialization check, initialize state variable or jump to toggles
@@ -242,14 +247,14 @@
 		%BEQ% :ControlTerminal.Init
 
 	:: State check : Minimized
-	%CMP% "%uldr.ControlTerminal.state%" "Minimized"
+	%CMP% "%uldr.controlTerminal.state%" "Minimized"
 		%BEQ% :ControlTerminal.Restore
 
 	:: State check : Restored
-	%CMP% "%uldr.ControlTerminal.state%" "Restored"
+	%CMP% "%uldr.controlTerminal.state%" "Restored"
 		%BEQ% :ControlTerminal.Minimize
 
-	:: ControlTerminal Falltrhough State Safety and warn message
+	:: ControlTerminal Fallthrough State Safety and warn message
 	%JSR% :DisplayMessage "%uldr.warn[0001]%"
 	%RTS%
 
@@ -277,8 +282,8 @@
 	:: start msg
 	%JSR% :DisplayMessage "%uldr.msg[0002]%"
 
-	: open app in new terminal tab, then return tab focus back to the first tab.
-	wt --window 0 -d %uldr.path% --title %uldr.AppName% %uldr.powerShellExe% %uldr.LoaderScript%
+	: open app in new terminal tab, then return tab focus back to the first tab.	
+	wt --window 0 -d "%uldr.path%" --title "%uldr.appName%" "%uldr.powerShellExe%" "%uldr.LoaderScript%"
 	wt --window 0 focus-tab --target 0
 
 	%RTS%
@@ -287,45 +292,40 @@
 :CheckHTTPServerUP {
 	%JSR% :DisplayMessage "%uldr.msg[0005]%"
 
-	:: safely store flags for compare
-	%PUSHF%
+	:: Pre optimize HTTP Return state to false
+	set CheckHTTPServerUP.Return=False
 
-	:: Set X Register (XR) to 0 (loop counter)
+	:: Store CPU flags and set loop counter to 0
+	%PUSHF%
 	%LDX% 0
 
 	:CheckHTTPServerUP.Loop
-		:: HTTP Server check		
-		curl -s -o nul -I -f --max-time 1 http://%uldr.IP%:%uldr.Port%
-
-		:: Check if curl returned an error while probing the http server.
+		:: Probe HTTP Server and test error output
+		curl -s -o nul -I -f --max-time 1 http://%uldr.ip%:%uldr.port%
 		%CMP% %errorlevel% 0
 			%BEQ% :CheckHTTPServerUP.True
 			%BNE% :CheckHTTPServerUP.False
 
 		:CheckHTTPServerUP.True
-			:: Run message
+			:: Display server Up message, set state and exit
 			%JSR% :DisplayMessage "%uldr.msg[0001]%" NL_Pre
 			set CheckHTTPServerUP.Return=True
-
-			:: Branch to exit and restore flags
 			%BRA% :CheckHTTPServerUP.Exit
 
 		:CheckHTTPServerUP.False
-			:: Increment loop counter
+			:: Increment loop counter, then check max tries
 			%INX%
-			set CheckHTTPServerUP.Return=False
-
-			:: Check for max retries, show timeout message on max
 			%CMP% %XR% %uldr.maxTriesHTTP%
 				%BEQ% :CheckHTTPServerUP.Timeout
 				%BNE% :CheckHTTPServerUP.Continue
 
 		:CheckHTTPServerUP.Timeout
-			:: Output timout error
+			:: Output timeout error and exit
 			%JSR% :DisplayMessage "%uldr.error[0001]%" NL_Pre
 			%BRA% :CheckHTTPServerUP.Exit
 
 		:CheckHTTPServerUP.Continue
+			:: Display moving dot per failed HTTP probe
 			echo|set /p="."
 			%JSR% :delay 1
 
@@ -424,7 +424,7 @@
 
 	:: Call external Parser with key and value, return error level, and pipe stdout (return value) to file.
 	:ReadIniKV.Read
-		:: Clear Result Before Qurey
+		:: Clear Result Before Query
     	set "uldr.iniResult="
     	%JSR% "%uldr.iniParser%" "%uldr.iniFile%" "%1" "%2" > "%TEMP%\uldr_ini_output.tmp"
 		%JSR% :ReadIniKV.ErrorHandler %errorlevel%
@@ -443,7 +443,7 @@
 	:: Loading
 	%JSR% :DisplayMessage "%uldr.msg[0009]%"
 
-	:: Delay before browser starts, allows user to read our console messages breifly.
+	:: Delay before browser starts, allows user to read our console messages briefly.
 	%JSR% :ReadIniKV user browserDelay
 	set "uldr.browserDelay=%uldr.iniResult%"
 
@@ -469,8 +469,8 @@
 	:: Loading Message
 	%JSR% :DisplayMessage "%uldr.msg[0010]%"
 
-	:: Web Server Config
-	%JSR% :ReadIniKV %1 AppName	
+	:: loads: AppName, Port, IP, Path, Loader Script, Splash Image, and Browser Arguments
+	%JSR% :ReadIniKV %1 AppName
 	set "uldr.appName=%uldr.iniResult%"
 
 	%JSR% :ReadIniKV %1 port
@@ -485,10 +485,9 @@
 	%JSR% :ReadIniKV %1 loaderScript
 	set "uldr.loaderScript=%uldr.path%\%uldr.iniResult%"
 
-	:: Splash Config
 	%JSR% :ReadIniKV %1 splashImage
 	set "uldr.splashImage=%uldr.appPath%%uldr.iniResult%"
-	
+
 	%JSR% :ReadIniKV %1 browserArgs
 	set "uldr.browserArgs=%uldr.iniResult%"
 
@@ -504,8 +503,10 @@
 	%JSR% :InitMessageTable LowLevel		:: Initialize Low Level message strings.
 	%JSR% :ShowWelcomeMessage
 	%JSR% :LoadExternalAppConfig %1			:: Load configuration variables for specific external HTTP Application.
-	%JSR% :InitMessageTable Main			:: Initialize Main application message strings.	
 	%JSR% :LoadUserConfig					:: Loads user configuration data from the ini file.
+	%JSR% :InitMessageTable Main			:: Initialize Main application message strings.	
+	::%JSR% :LoadUserConfig					:: Loads user configuration data from the ini file.
+
 	%JSR% :UpdateSplash	Init				:: Splash State Initialization.
 	%JSR% :ControlTerminal Init				:: Terminal state Initialization.
 
