@@ -1,7 +1,7 @@
-:preInit (	
+:_PreInit {
 	set "al.self=assembly.library.cmd"
 	goto :_main
-)
+}
 
 /*
 	Macro Assembly Batch Library Extension: Mable
@@ -54,12 +54,12 @@
 		 - Consider versioning for %PUSH% vs %PUSHF%.		 
 */
 
-:al.destructor (	
+:al.destructor {
 	set "al.self="
 	exit /b
-)
+}
 
-:al.exportMnemonics_v1.1 (
+:al.exportMnemonics_v1.1 {
 
 	:: unconditional jumps
 		:: Jump to SubRoutine
@@ -121,9 +121,9 @@
 		set "AR=0"
 
 	exit /b
-)
+}
 
-:al.exportFlags_v1.1 (
+:al.exportFlags_v1.1 {
 	:: Not really flags, analogous in behavior, CMP microcode dynamically alters their behavior.
 	:: branching
 		:: unconditional BRAnch
@@ -155,32 +155,32 @@
 		set "JGT=REM"
 
 	exit /b
-)
+}
 
 :: Load var into X, does not set any flags yet
-:al.LDX (	
+:al.LDX {
 	set /a "XR=%1"
 	exit /b
-)
+}
 
-:al.LDY (	
+:al.LDY {
 	set /a "YR=%1"
 	exit /b
-)
+}
 
 :: increment X Register
-:al.INX (
+:al.INX {
 	set /a "XR+=1"
 	exit /b
-)
+}
 
 :: increment Y Register
-:al.INY (
+:al.INY {
 	set /a "YR+=1"
 	exit /b
-)
+}
 
-:al.FEX (
+:al.FEX {
 	call set "JEQ=REM"
 	call set "JNE=REM"
 	call set "BEQ=REM"
@@ -194,9 +194,9 @@
 		call set "BNE=goto"
 	)
 	exit /b
-)
+}
 
-:al.PUSHF (
+:al.PUSHF {
 	:: increment stack pointer
 	call set /a "al.sp+=1"
 
@@ -217,9 +217,9 @@
 	call set "al.stack[%al.sp%].YR=%YR%"
 	
 	exit /b
-)
+}
 
-:al.POPF (
+:al.POPF {
 	:: **** stack underflow detection ****
 	if "%al.sp%" EQU "0" (
 		echo.[FATAL] Stack Underflow
@@ -245,9 +245,9 @@
 	:: decrement stack pointer
 	set /a "al.sp-=1"
 	exit /b
-)
+}
 
-:al.CMP (
+:al.CMP {
 	:: Enables conditinal jumps if conditions are met, else sets to a NOP command (REM).
 	call set "JEQ=REM"
 	call set "JNE=REM"
@@ -280,9 +280,9 @@
 	)
 
 	exit /b
-)
+}
 
-:al.versionSelector (
+:al.versionSelector {
 	if "%1" EQU "1.1" (
 		call :al.exportMnemonics_v1.1
 		call :al.exportFlags_v1.1	
@@ -290,9 +290,9 @@
 		echo Valid API version not supplied
 	)
 	exit /b
-)
+}
 
-:_main (
+:_main {
 	:: test the first passed argument, if = "import", initialize CPU states
 	:: - else check if we are testing specific mnemonics, and call their code
 	if "%1" EQU "import" (
@@ -329,6 +329,6 @@
 
 	call :al.destructor
 	goto :_end
-)
+}
 
 :_end
