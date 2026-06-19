@@ -201,7 +201,7 @@
 		%BEQ% :DisplayMessage.NL_Both
 
 	%BRA% :DisplayMessage.NL_None
-	
+
 	:: New Line Sub Functions
 	:DisplayMessage.NL_Pre
 		echo.
