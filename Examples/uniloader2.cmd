@@ -20,6 +20,7 @@
 		Opens App as a Browser stored application without the Browser Chrome, creating a more native application feel.
 		Adds a pretty graphical splash while loading.
 		Tries to adhere to single responsibility and never nesting principles.
+		Got a curly brace error? you coded badly.
 		Could this be done in 5 lines? Yes. Do I care? No.
 */
 
@@ -59,7 +60,8 @@
 		set "uldr.minResExe=%uldr.appPath%bin\minres.exe"
 
 	:: Splash Config		
-		set "uldr.splashExe=%uldr.appPath%bin\splash2.exe"
+		:: set "uldr.splashExe=%uldr.appPath%bin\splash2.exe"
+		set "uldr.splashExe=%uldr.appPath%bin\splash3.exe"
 		set "uldr.splashIPCFile=splash.IPC"
 
 	:: -- Browser Launch Config !! do not alter quoting !!
@@ -71,17 +73,21 @@
 }
 
 :InitMessageTable {
+	%BRA% :InitMessageTable.Dispatcher
+
 	:: LowLevel error messages must be avilable before the data is ready to populate the messages in the Main section.
-	%CMP% %1 LowLevel
-		%BEQ% :InitMessageTable.LowLevel
+	:InitMessageTable.Dispatcher {
+		%CMP% %1 LowLevel
+			%BEQ% :InitMessageTable.LowLevel
 
-	%CMP% %1 Main
-		%BEQ% :InitMessageTable.Main
+		%CMP% %1 Main
+			%BEQ% :InitMessageTable.Main
 
-	%RTS%
+		%RTS%
+	}
 
 	:: Don't embed variables inside LowLevel error strings! Init sequence will prevent them being active.
-	:InitMessageTable.LowLevel		
+	:InitMessageTable.LowLevel
 		:: Messages
 		set "uldr.msg[0000]=Universal ML/AI Application Loader (C) 2026 Autumn"
 		set "uldr.msg[0006]=[ INFO ] Starting Background Splash Application"
@@ -150,29 +156,38 @@
 }
 
 :CheckGumInstalled {
+	%BRA% :CheckGumInstalled.Dispatcher
+
 	:: Check if gum responds
-	%JSR% gum -v > %uldr.stdErr%
-	%CMP% %errorlevel% 0		
-		%BNE% :CheckGumInstalled.False
-		%BRA% :CheckGumInstalled.True
+	:CheckGumInstalled.Dispatcher {
+		%JSR% gum -v > %uldr.stdErr%
+		%CMP% %errorlevel% 0		
+			%BNE% :CheckGumInstalled.False
+			%BRA% :CheckGumInstalled.True
+	}
 
 	:CheckGumInstalled.True		
 		set "uldr.gumInstalled=True"
 		%RTS%
 
 	:CheckGumInstalled.False
-		set "uldr.gumInstalled=False"	
+		set "uldr.gumInstalled=False"
 		%JSR% :DisplayMessage "%uldr.warn[0003]%"
 		%RTS%
 }
 
 :DisplaySpinner {
-	%CMP% "%uldr.gumInstalled%" "True"
-		%BNE% :DisplaySpinner.text
-		%BRA% :DisplaySpinner.gum
+	%BRA% :DisplaySpinner.Dispatcher
+
+	:DisplaySpinner.Dispatcher {
+		%CMP% "%uldr.gumInstalled%" "True"
+			%BNE% :DisplaySpinner.text
+			%BRA% :DisplaySpinner.gum
+	}
 
 	:DisplaySpinner.Gum
 		:: dispaly pretty gum spinner for arg2 seconds with arg1 message.
+		:: gum spin --spinner points --title "%1 %XR%" timeout /t %2
 		gum spin --spinner points --title %1 timeout /t %2
 		%RTS%
 
@@ -188,19 +203,22 @@
 
 	:: Expand arguments for readability
 	set "DisplayMessage.msg=%~1"
-	set "DisplayMessage.operation=%~2"
+	set "DisplayMessage.nl_Position=%~2"
+	%BRA% :DisplayMessage.Dispatcher
 
-	:: New Line Branch Table	
-	%CMP% "%DisplayMessage.operation%" "NL_Pre"
-		%BEQ% :DisplayMessage.NL_Pre
+	:DisplayMessage.Dispatcher {
+		:: New Line Branch Table
+		%CMP% "%DisplayMessage.nl_Position%" "NL_Pre"
+			%BEQ% :DisplayMessage.NL_Pre
 
-	%CMP% "%DisplayMessage.operation%" "NL_Post"
-		%BEQ% :DisplayMessage.NL_Post
+		%CMP% "%DisplayMessage.nl_Position%" "NL_Post"
+			%BEQ% :DisplayMessage.NL_Post
 
-	%CMP% "%DisplayMessage.operation%" "NL_Both"
-		%BEQ% :DisplayMessage.NL_Both
+		%CMP% "%DisplayMessage.nl_Position%" "NL_Both"
+			%BEQ% :DisplayMessage.NL_Both
 
-	%BRA% :DisplayMessage.NL_None
+		%BRA% :DisplayMessage.NL_None
+	}
 
 	:: New Line Sub Functions
 	:DisplayMessage.NL_Pre
@@ -230,6 +248,7 @@
 	%RTS%
 }
 
+
 :: -- Ini file loader
 
 :GetIniKB {
@@ -240,7 +259,7 @@
 		%BRA% :GetIniKB.GetVal
 
 	:: Call external Parser with key and value, return error level, and pipe stdout (return value) to file.
-	:GetIniKB.GetVal
+	:GetIniKB.GetVal {
 		:: Clear result before Query.
     	set "uldr.iniResult="
     	%JSR% "%uldr.iniParser%" "%uldr.iniFile%" "%1" "%2" > "%TEMP%\uldr_ini_output.tmp"
@@ -250,13 +269,14 @@
 		%CMP% %uldr.iniError% 0
 			%BNE% :GetIniKB.HandleError
 			%BRA% :GetIniKB.ReturnResult
+	}
 
 	:GetIniKB.NoParser
 		%JSR% :DisplayMessage "%uldr.error[0005]%"
 		%JSR% :PauseApp
 		%BRK% 5
 
-	:GetIniKB.HandleError		
+	:GetIniKB.HandleError
 		::	Display IniParser Error, injecting error into the string wiht double %% expansion, delete IniParser temp file, break with exit code.
 		%JSR% :DisplayMessage "%%uldr.error[000%uldr.iniError%]%%"
 		del "%TEMP%\uldr_ini_output.tmp" 2>nul
@@ -317,6 +337,9 @@
 	%JSR% :GetIniKB %1 splashImage
 	set "uldr.splashImage=%uldr.appPath%%uldr.iniResult%"
 
+	%JSR% :GetIniKB %1 splashAnimationSpeed
+	set "uldr.splashAnimationSpeed=%uldr.iniResult%"	
+
 	%JSR% :GetIniKB %1 browserArgs
 	set "uldr.browserArgs=%uldr.iniResult%"
 
@@ -325,41 +348,43 @@
 
 :: -- Core Application Functions
 
-:UpdateSplash {
-	::
+:ControlSplash {
 	%CMP% "%~1" "init"
-		%BEQ% :UpdateSplash.Init
+		%BEQ% :ControlSplash.Init
+		%BRA% :ControlSplash.Dispatcher
 
-	%CMP% %uldr.splash.State% init.Done
-		%BEQ% :UpdateSplash.Load
+	:ControlSplash.Dispatcher {
+		%CMP% %uldr.splash.State% init.Done
+			%BEQ% :ControlSplash.Load
 
-	%CMP% %uldr.splash.State% load.Done
-		%BEQ% :UpdateSplash.Display
+		%CMP% %uldr.splash.State% load.Done
+			%BEQ% :ControlSplash.Display
 
-	%CMP% %uldr.splash.State% display.Done
-		%BEQ% :UpdateSplash.Quit
+		%CMP% %uldr.splash.State% display.Done
+			%BEQ% :ControlSplash.Quit
 
-	:: Exception: Fall-through
-	%JSR% :DisplayMessage "%uldr.warn[0000]%"
-	%RTS%
+		:: Exception: Fall-through
+		%JSR% :DisplayMessage "%uldr.warn[0000]%"
+		%RTS%
+	}
 
-	:UpdateSplash.Init		
+	:ControlSplash.Init
 		set "uldr.splash.State=init.Done"
 		%RTS%
 
-	:UpdateSplash.Load
-		%JSR% :DisplayMessage "%uldr.msg[0006]%"		
-		%JFR% /b %uldr.splashExe% %uldr.splashImage% %uldr.splashIPCFile%
+	:ControlSplash.Load
+		%JSR% :DisplayMessage "%uldr.msg[0006]%"
+		%JFR% /b %uldr.splashExe% %uldr.splashImage% %uldr.splashIPCFile% %uldr.splashAnimationSpeed%
 		set "uldr.splash.State=load.Done"
 		%RTS%
 
-	:UpdateSplash.Display
+	:ControlSplash.Display
 		%JSR% :DisplayMessage "%uldr.msg[0007]%"
 		echo display > %uldr.splashIPCFile%	
 		set "uldr.splash.State=display.Done"
 		%RTS%
 
-	:UpdateSplash.Quit
+	:ControlSplash.Quit
 		%JSR% :DisplayMessage "%uldr.msg[0008]%"
 		echo quit > %uldr.splashIPCFile%
 		set "uldr.splash.State=null"
@@ -367,25 +392,28 @@
 }
 
 :ControlTerminal {
-	:: Is Disabled?, exit if so
+	:: Exit If Disabled is set in config.
 	%CMP% "%uldr.controlTerminal.state%" "Disabled"
 		%BEQ% :ControlTerminal.Exit
 
-	:: State initialization check, initialize state variable or jump to toggles
+	:: Initialize state variable or jump to toggles.
 	%CMP% "%1" "Init"
 		%BEQ% :ControlTerminal.Init
+		%BRA% :ControlTerminal.Flip
 
-	:: State check : Minimized
-	%CMP% "%uldr.controlTerminal.state%" "Minimized"
-		%BEQ% :ControlTerminal.Restore
+	:ControlTerminal.Flip {
+		:: Flip State from Minimized to Restore
+		%CMP% "%uldr.controlTerminal.state%" "Minimized"
+			%BEQ% :ControlTerminal.Restore
 
-	:: State check : Restored
-	%CMP% "%uldr.controlTerminal.state%" "Restored"
-		%BEQ% :ControlTerminal.Minimize
+		:: Flip State from Restore to Minimized
+		%CMP% "%uldr.controlTerminal.state%" "Restored"
+			%BEQ% :ControlTerminal.Minimize
 
-	:: Exception: ControlTerminal Fallthrough and warn message - invalid argument if we got here.
-	%JSR% :DisplayMessage "%uldr.warn[0001]%"
-	%RTS%
+		:: Exception Message: invalid dev state if we got here.
+		%JSR% :DisplayMessage "%uldr.warn[0001]%"
+		%RTS%
+	}
 
 	:ControlTerminal.Init
 		set "uldr.controlTerminal.state=Restored"
@@ -393,12 +421,12 @@
 
 	:ControlTerminal.Minimize
 		:: Don't vanish in an instant like suspicious software.
-		%JSR% :Delay 2		
+		%JSR% :Delay 2
 		%JSR% %uldr.minResExe% Minimize
 		set "uldr.controlTerminal.state=Minimized"
 		%BRA% :ControlTerminal.Exit
 
-	:ControlTerminal.Restore		
+	:ControlTerminal.Restore
 		%JSR% %uldr.minResExe% Restore
 		set "uldr.controlTerminal.state=Restored"
 		%BRA% :ControlTerminal.Exit
@@ -411,59 +439,58 @@
 	:: start msg
 	%JSR% :DisplayMessage "%uldr.msg[0002]%"
 
-	: open app in new terminal tab, then return tab focus back to the first tab.
+	:: Open app in new terminal tab.
 	wt --window 0 -d "%uldr.path%" --title "%uldr.appName%" "%uldr.powerShellExe%" "%uldr.LoaderScript%"
+	:: Return tab focus back to the first tab.
 	wt --window 0 focus-tab --target 0
 
 	%RTS%
 }
 
 :CheckHTTPServerUP {
+	:: Show server wait message
 	%JSR% :DisplayMessage "%uldr.msg[0005]%"
 
-	:: Pre optimize HTTP Return state to false
+	:: Pre set Return value to False.
 	set CheckHTTPServerUP.Return=False
 
-	:: Store CPU flags and set loop counter to 0
+	:: Store CPU flags, set loop counter to 0.
 	%PUSHF%
 	%LDX% 0
-
-	:CheckHTTPServerUP.Loop
-		:: Fake gum usage with timer instead. Curl runs for a fraction of a second, we would never see it if we passed curl and args to gum
-		%JSR% :DisplaySpinner "Probing Host: %uldr.ip%:%uldr.port%..." "2"
-		:: Probe HTTP Server and test error output		
-		curl -s -o nul -I -f --max-time 1 http://%uldr.ip%:%uldr.port%
-		%CMP% %errorlevel% 0
-			%BEQ% :CheckHTTPServerUP.True
-			%BRA% :CheckHTTPServerUP.False
-
-		:CheckHTTPServerUP.True
-			:: Display server Up message, set state and exit
-			%JSR% :DisplayMessage "%uldr.msg[0001]%" NL_Pre
-			set CheckHTTPServerUP.Return=True
-			%BRA% :CheckHTTPServerUP.Exit
-
-		:CheckHTTPServerUP.False
-			:: Increment loop counter, then check max tries
-			%INX%
-			%CMP% %XR% %uldr.maxTriesHTTP%
-				%BEQ% :CheckHTTPServerUP.Timeout
-				%BRA% :CheckHTTPServerUP.Continue
-
-		:CheckHTTPServerUP.Timeout
-			:: Output timeout error and exit
-			%JSR% :DisplayMessage "%uldr.warn[0002]%" NL_Pre
-			%BRA% :CheckHTTPServerUP.Exit
-
-		:CheckHTTPServerUP.Continue			
-			%JSR% :DisplaySpinner "Sleeping..." 4
-
 	%BRA% :CheckHTTPServerUP.Loop
 
+	:CheckHTTPServerUP.Loop {
+		:: Display Probe with a short timer: Ensures message is visible long enough to read the probe message.
+		%JSR% :DisplaySpinner "Probing Host: %uldr.ip%:%uldr.port%..." "2"
+		:: Probe HTTP Server and test error output
+		curl -s -o nul -I -f --max-time 1 http://%uldr.ip%:%uldr.port%
+		%CMP% %errorlevel% 0
+			%BNE% :CheckHTTPServerUP.CheckMaxTries
+			%BRA% :CheckHTTPServerUP.IsUp
+
+		:CheckHTTPServerUP.CheckMaxTries
+			%JSR% :DisplaySpinner "Sleeping..." 4
+			%INX%
+			%CMP% %XR% %uldr.maxTriesHTTP%
+				%BEQ% :CheckHTTPServerUP.MaxTriesExceeded
+				%BRA% :CheckHTTPServerUP.Loop
+	}
+
+	:CheckHTTPServerUP.MaxTriesExceeded
+		:: Output timeout error and exit.
+		%JSR% :DisplayMessage "%uldr.warn[0002]%" NL_Pre
+		%BRA% :CheckHTTPServerUP.Exit
+
+	:CheckHTTPServerUP.IsUp
+		:: Display server Up message, set state and exit.
+		%JSR% :DisplayMessage "%uldr.msg[0001]%" NL_Pre
+		set CheckHTTPServerUP.Return=True
+		%BRA% :CheckHTTPServerUP.Exit
+
 	:CheckHTTPServerUP.Exit
-		:: Resstore flags after compare
+		:: Resstore flags and registers.
 		%POPF%
-	%RTS%
+		%RTS%
 }
 
 :LaunchBrowser {
@@ -473,7 +500,7 @@
 		%BRA% :LaunchBrowser.Skip
 
 	:: Try to launch if server is Up.
-	:LaunchBrowser.Try
+	:LaunchBrowser.Try {
 		%CMP% %CheckHTTPServerUP.Return% True
 			%BNE% :LaunchBrowser.Exit
 
@@ -484,9 +511,10 @@
 		:: Launch Browser App with app profile
 		%JFR% "%uldr.appName%" %uldr.browserPath% %uldr.browserArgs%
 		%RTS%
+	}
 
 	:LaunchBrowser.Skip
-		:: Browser skip msg		
+		:: Browser skip msg	
 		%JSR% :DisplayMessage "%uldr.msg[0004]%"
 		%RTS%
 
@@ -503,23 +531,23 @@
 	%JSR% :InitNameSpace					:: Initialize this.application variable namespace.
 	%JSR% :InitMessageTable LowLevel		:: Initialize Low Level message strings.
 	%JSR% :DisplayWelcomeMessage
-	%JSR% :CheckGumInstalled				::
+	%JSR% :CheckGumInstalled
 	%JSR% :LoadExternalAppConfig %1			:: Load configuration variables for specific external HTTP Application.
 	%JSR% :LoadUserConfig					:: Loads user configuration data from the ini file.
 	%JSR% :InitMessageTable Main			:: Initialize Main application message strings.
-	%JSR% :UpdateSplash	Init				:: Splash State Initialization.
+	%JSR% :ControlSplash Init				:: Splash State Initialization.
 	%JSR% :ControlTerminal Init				:: Terminal state Initialization.
 
 	:: Body
-	%JSR% :UpdateSplash						:: Splash state transition: Loads splash image application in the background, waits for IPC commands.
+	%JSR% :ControlSplash					:: Splash state transition: Loads splash image application in the background, waits for IPC commands.
 	%JSR% :StartHTTPServer					:: Start HTTP Server for AI Application.
-	%JSR% :UpdateSplash						:: Splash state transition: Sends Display IPC Command to the Splash Application.
+	%JSR% :ControlSplash					:: Splash state transition: Sends Display IPC Command to the Splash Application.
 	%JSR% :ControlTerminal					:: Terminal State transition: Minimize Terminal.
 	%JSR% :CheckHTTPServerUP				:: Check if server is up (loop with max).
 
 	:: Exit
 	%JSR% :ControlTerminal					:: Terminal State transition: Restore Terminal
-	%JSR% :UpdateSplash						:: Splash state transition: Sends Quit IPC Command to the Splash Application.
+	%JSR% :ControlSplash					:: Splash state transition: Sends Quit IPC Command to the Splash Application.
 	%JSR% :LaunchBrowser					:: Try to Launch Browser Application, Displays Browser IP/URL if Disabled in config.
 	%JSR% :Bye								:: Wave.
 	%RTS%
