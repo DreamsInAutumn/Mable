@@ -2,7 +2,7 @@
 ## User Manual & Reference Guide
 
 ### 1. Introduction
-Welcome to **Mable**. Mable is a structural paradigm shift for Windows Batch scripting, providing assembly-like mnemonics to enforce Single Responsibility Principles (SRP) and flat code hierarchies. By treating Batch scripts like macro assembly, Mable *can(tm) transform spaghettified, nested nightmares into clean, readable, and maintainable state machines.
+Welcome to **Mable**. Mable is a structural paradigm shift for Windows Batch scripting, providing assembly-like mnemonics to enforce Single Responsibility Principles (SRP) and flat code hierarchies. By treating Batch scripts like macro assembly, Mable *can transform spaghettified, nested nightmares into clean, readable, and maintainable state machines.
 
 ---
 
