@@ -1,12 +1,18 @@
-:: -- Framework Functions ---
+:: -- Bootstrap Function ---
 
 :_sysInit {
 	@echo off
 	cls
-	call :_importCoreLib assembly.library.cmd
+	call :_ImportCoreLib assembly.library.cmd import 1.1	
+::	call :_ImportCoreLib gum.lib-1.0.cmd import
+
+	:: Jump to  main application entry point
 	call :_main %1
+
+	:: Clean Exit
 	exit 0
 }
+
 
 /*
 	AI / IMG Processing / Chat Browser App Loader - (C) 2026 Autumn
@@ -22,24 +28,37 @@
 		Tries to adhere to single responsibility and never nesting principles.
 		Got a curly brace error? you coded badly.
 		Could this be done in 5 lines? Yes. Do I care? No.
-*/
 
-:_importCoreLib {
-	set "LibToImport=%1"
+	To Do: Mable 2.0
+		Think about the pro/con of converting mable into an interpreter so that mable encoded libraries can also use mable syntax without importing the framework a second time.
+		Instead of calling mable as a library, it would be the first command (mable.cmd) followed by the script.
+
+			execution:
+				mable uniloader2 sillytavern
+
+	*/
+
+:_ImportCoreLib {
+	set "uldr.LibToImport=%1"
+	set "uldr.LibInit=%2"
+	set "uldr.LibVer=%3"
 
 	:: If the library exists somewhere on the environment path, store result in errorlevel
-	where %LibToImport% >nul 2>&1
+	where %uldr.LibToImport% >nul 2>&1
 
 	:: Test if assembly library exists,
 	if %errorlevel% EQU 0 (
-		call %LibToImport% import 1.1
+		call %uldr.LibToImport% %uldr.LibInit% %uldr.LibVer%
 	) else (
-		echo [ Fatal ] library not found: %LibToImport% && echo.
-		exit 1
+		echo [ Fatal ] library not found: %uldr.LibToImport% && echo.
+		:: exit 233495814
+		exit 3735928559
 	)
 
-	set "LibToImport="
-	%RTS%
+	set "uldr.LibToImport="
+	set "uldr.LibInit="
+	set "uldr.LibVer="
+	exit /b
 }
 
 
@@ -83,7 +102,7 @@
 		%CMP% %1 Main
 			%BEQ% :InitMessageTable.Main
 
-		%RTS%
+		%BRA% :InitMessageTable.Exit
 	}
 
 	:: Don't embed variables inside LowLevel error strings! Init sequence will prevent them being active.
@@ -108,8 +127,7 @@
 		set "uldr.warn[0001]=[ WARN ] invalid Terminal State."
 		set "uldr.warn[0002]=[FAILED] Timed out waiting for the Application server to start."
 		set "uldr.warn[0003]=[ WARN ] Gum is not installed. Install Gum with: winget install charmbracelet.gum :)..."
-
-		%RTS%
+		%BRA% :InitMessageTable.Exit
 
 	:InitMessageTable.Main
 		:: Messages		
@@ -118,8 +136,10 @@
 		set "uldr.msg[0003]=[ INFO ] Launching %uldr.appName% browser app..."
 		set "uldr.msg[0004]=[ INFO ] Browser opening disabled. Server available at: http://%uldr.ip%:%uldr.port%"
 		set "uldr.msg[0005]=[ INFO ] Waiting for %uldr.appName% server..."
+		%BRA% :InitMessageTable.Exit
 
-	%RTS%
+	:InitMessageTable.Exit
+		%RTS%
 }
 
 
@@ -168,11 +188,14 @@
 
 	:CheckGumInstalled.True		
 		set "uldr.gumInstalled=True"
-		%RTS%
+		%BRA% :CheckGumInstalled.Exit
 
 	:CheckGumInstalled.False
 		set "uldr.gumInstalled=False"
 		%JSR% :DisplayMessage "%uldr.warn[0003]%"
+		%BRA% :CheckGumInstalled.Exit
+
+	:CheckGumInstalled.Exit
 		%RTS%
 }
 
@@ -185,15 +208,18 @@
 			%BRA% :DisplaySpinner.gum
 	}
 
-	:DisplaySpinner.Gum
-		:: dispaly pretty gum spinner for arg2 seconds with arg1 message.
-		:: gum spin --spinner points --title "%1 %XR%" timeout /t %2
-		gum spin --spinner points --title %1 timeout /t %2
-		%RTS%
-
 	:DisplaySpinner.Text
 		<nul set /p="."
 		%JSR% :delay %2
+		%BRA% :DisplaySpinner.Exit
+
+	:DisplaySpinner.Gum
+		:: dispaly pretty gum spinner for arg2 seconds with arg1 message.
+		:: gum spin --spinner points --title "%1 %XR%" timeout /t %2
+		%JSR% gum spin --spinner points --title %1 timeout /t %2
+		%BRA% :DisplaySpinner.Exit
+
+	:DisplaySpinner.Exit
 		%RTS%
 }
 
@@ -244,22 +270,25 @@
 	:DisplayMessage.Exit
 		:: Restore flags
 		%POPF%
-
-	%RTS%
+		%RTS%
 }
 
 
 :: -- Ini file loader
 
 :GetIniKB {
-	:: Reads section (Arg:1) and Key (Arg:2) from a specified ini file, returns its value.
-	:: Test if Ini FIle Exists
-	%FEX% "%uldr.iniParser%"
-		%BNE% :GetIniKB.NoParser
-		%BRA% :GetIniKB.GetVal
+	%BRA% :GetIniKB.Dispatcher
 
-	:: Call external Parser with key and value, return error level, and pipe stdout (return value) to file.
+	:GetIniKB.Dispatcher {
+		:: Reads section (Arg:1) and Key (Arg:2) from a specified ini file, returns its value.
+		:: Test if Ini FIle Exists
+		%FEX% "%uldr.iniParser%"
+			%BNE% :GetIniKB.NoParser
+			%BRA% :GetIniKB.GetVal
+	}
+
 	:GetIniKB.GetVal {
+		:: Call external Parser with key and value, return error level, and pipe stdout (return value) to file.
 		:: Clear result before Query.
     	set "uldr.iniResult="
     	%JSR% "%uldr.iniParser%" "%uldr.iniFile%" "%1" "%2" > "%TEMP%\uldr_ini_output.tmp"
@@ -286,7 +315,7 @@
 		: Read temp file output from ini parser, store value in result, delete temp file, exit.
 	 	set /p uldr.iniResult=<"%TEMP%\uldr_ini_output.tmp"
 		del "%TEMP%\uldr_ini_output.tmp" 2>nul
-		%RTS%
+		%BRA% :GetIniKB.Exit
 
 	:GetIniKB.Exit
     	%RTS%
@@ -370,36 +399,43 @@
 
 	:ControlSplash.Init
 		set "uldr.splash.State=init.Done"
-		%RTS%
+		%BRA% :ControlSplash.Exit
 
 	:ControlSplash.Load
 		%JSR% :DisplayMessage "%uldr.msg[0006]%"
 		%JFR% /b %uldr.splashExe% %uldr.splashImage% %uldr.splashIPCFile% %uldr.splashAnimationSpeed%
 		set "uldr.splash.State=load.Done"
-		%RTS%
+		%BRA% :ControlSplash.Exit
 
 	:ControlSplash.Display
 		%JSR% :DisplayMessage "%uldr.msg[0007]%"
 		echo display > %uldr.splashIPCFile%	
 		set "uldr.splash.State=display.Done"
-		%RTS%
+		%BRA% :ControlSplash.Exit
 
 	:ControlSplash.Quit
 		%JSR% :DisplayMessage "%uldr.msg[0008]%"
 		echo quit > %uldr.splashIPCFile%
 		set "uldr.splash.State=null"
+		%BRA% :ControlSplash.Exit
+
+	:ControlSplash.Exit
 		%RTS%
 }
 
 :ControlTerminal {
-	:: Exit If Disabled is set in config.
-	%CMP% "%uldr.controlTerminal.state%" "Disabled"
-		%BEQ% :ControlTerminal.Exit
+	%BRA% :ControlTerminal.Dispatcher
 
-	:: Initialize state variable or jump to toggles.
-	%CMP% "%1" "Init"
-		%BEQ% :ControlTerminal.Init
-		%BRA% :ControlTerminal.Flip
+	:ControlTerminal.Dispatcher
+		:: Exit If Disabled is set in config.
+		%CMP% "%uldr.controlTerminal.state%" "Disabled"
+			%BEQ% :ControlTerminal.Exit
+
+		:: Initialize state variable or jump to toggles.
+		%CMP% "%1" "Init"
+			%BEQ% :ControlTerminal.Init
+			%BRA% :ControlTerminal.Flip
+	}
 
 	:ControlTerminal.Flip {
 		:: Flip State from Minimized to Restore
@@ -412,12 +448,12 @@
 
 		:: Exception Message: invalid dev state if we got here.
 		%JSR% :DisplayMessage "%uldr.warn[0001]%"
-		%RTS%
+		%BRA% :ControlTerminal.Exit
 	}
 
 	:ControlTerminal.Init
 		set "uldr.controlTerminal.state=Restored"
-		%RTS%
+		%BRA% :ControlTerminal.Exit
 
 	:ControlTerminal.Minimize
 		:: Don't vanish in an instant like suspicious software.
@@ -436,25 +472,17 @@
 }
 
 :StartHTTPServer {
-	:: start msg
+	:: start msg, Open app in new terminal tab and return focus to our control flow tab.
 	%JSR% :DisplayMessage "%uldr.msg[0002]%"
-
-	:: Open app in new terminal tab.
-	wt --window 0 -d "%uldr.path%" --title "%uldr.appName%" "%uldr.powerShellExe%" "%uldr.LoaderScript%"
-	:: Return tab focus back to the first tab.
-	wt --window 0 focus-tab --target 0
-
+	%JSR% wt --window 0 -d "%uldr.path%" --title "%uldr.appName%" "%uldr.powerShellExe%" "%uldr.LoaderScript%"
+	%JSR% wt --window 0 focus-tab --target 0	
 	%RTS%
 }
 
 :CheckHTTPServerUP {
-	:: Show server wait message
-	%JSR% :DisplayMessage "%uldr.msg[0005]%"
-
-	:: Pre set Return value to False.
-	set CheckHTTPServerUP.Return=False
-
-	:: Store CPU flags, set loop counter to 0.
+	:: Show server wait message, assign default function return state to false, store flags and set loop counter to 0
+	%JSR% :DisplayMessage "%uldr.msg[0005]%"	
+	set CheckHTTPServerUP.Return=False	
 	%PUSHF%
 	%LDX% 0
 	%BRA% :CheckHTTPServerUP.Loop
@@ -463,7 +491,7 @@
 		:: Display Probe with a short timer: Ensures message is visible long enough to read the probe message.
 		%JSR% :DisplaySpinner "Probing Host: %uldr.ip%:%uldr.port%..." "2"
 		:: Probe HTTP Server and test error output
-		curl -s -o nul -I -f --max-time 1 http://%uldr.ip%:%uldr.port%
+		%JSR% curl -s -o nul -I -f --max-time 1 http://%uldr.ip%:%uldr.port%
 		%CMP% %errorlevel% 0
 			%BNE% :CheckHTTPServerUP.CheckMaxTries
 			%BRA% :CheckHTTPServerUP.IsUp
@@ -494,33 +522,36 @@
 }
 
 :LaunchBrowser {
-	 :: Skip browser if skip debug variable set to true set.
-	 %CMP% "%uldr.debug%" "True"
-		%BNE% :LaunchBrowser.Try
-		%BRA% :LaunchBrowser.Skip
+	 %BRA% :LaunchBrowser.BailDispatcher
 
-	:: Try to launch if server is Up.
-	:LaunchBrowser.Try {
+	 :LaunchBrowser.BailDispatcher {
+		:: Skip browser if skip debug variable set to true.
+	 	%CMP% "%uldr.debug%" "True"
+			%BEQ% :LaunchBrowser.Skip
+
+		:: Exit if Server is not running,
 		%CMP% %CheckHTTPServerUP.Return% True
-			%BNE% :LaunchBrowser.Exit
+			%BEQ% :LaunchBrowser.Launch		
+			%BRA% :LaunchBrowser.Exit
+	 }
 
-		:: Launch Message		
+	:LaunchBrowser.Skip
+		:: Browser skip msg.
+		%JSR% :DisplayMessage "%uldr.msg[0004]%"
+		%BRA% :LaunchBrowser.Exit
+
+	:LaunchBrowser.Launch {
+		:: Launch Message.	
 		%JSR% :DisplayMessage "%uldr.msg[0003]%" 
 		%JSR% :delay %uldr.browserDelay%
 
-		:: Launch Browser App with app profile
+		:: Launch Browser App with app profile.
 		%JFR% "%uldr.appName%" %uldr.browserPath% %uldr.browserArgs%
-		%RTS%
+		%BRA% :LaunchBrowser.Exit
 	}
-
-	:LaunchBrowser.Skip
-		:: Browser skip msg	
-		%JSR% :DisplayMessage "%uldr.msg[0004]%"
-		%RTS%
-
-	:: Safety-net
+	
 	:LaunchBrowser.Exit
-	%RTS%
+		%RTS%
 }
 
 :: -- Main Procedural Function
