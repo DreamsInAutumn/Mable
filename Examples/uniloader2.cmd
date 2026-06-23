@@ -426,7 +426,7 @@
 :ControlTerminal {
 	%BRA% :ControlTerminal.Dispatcher
 
-	:ControlTerminal.Dispatcher
+	:ControlTerminal.Dispatcher {
 		:: Exit If Disabled is set in config.
 		%CMP% "%uldr.controlTerminal.state%" "Disabled"
 			%BEQ% :ControlTerminal.Exit
