@@ -15,7 +15,7 @@
 
 
 /*
-	AI / IMG Processing / Chat Browser App Loader - (C) 2026 Autumn
+	Universal Batch Orchestrating App Loader - (C) 2026 Autumn
 
 	Usage:
 		Create a shortcut to this script + the argument listed in the ini file to load and launch.
