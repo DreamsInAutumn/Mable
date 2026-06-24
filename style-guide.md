@@ -7,9 +7,11 @@ Windows Batch is a wild, untamed environment. Left to its own devices, it tangle
 
 Here are the guiding paradigms for writing scripts alongside Mable. While not absolute laws, they suggest keeping your architecture sound and your execution predictable.
 
+Note: During development, Mable has seen many refinements to styles and best practices. The example file: uniloader.cmd is the present "gold standard".
+
 ---
 
-### 1. The Eradication of the `IF`
+### 1. The Departure from `IF`
 
 In traditional high-level scripting langauges we tend to lean heavily on `IF` and `ELSE` to make decisions. Mable asks us to leave that concept behind. We do not use `IF` statements. 
 
