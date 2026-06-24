@@ -52,7 +52,7 @@
 	set "gumState=false"
 	set "stdErr=nul 2>&1"
 
-	%RET%
+	%RTS%
 )
 
 :: --- utility fucntions ---
@@ -60,38 +60,41 @@
 :displayMsg (
 	:: displays two passed argument strings, strips quotes from arg1
 	echo %~1 %2
-	%RET%
+	%RTS%
 )
 
 :appDelay (
 	:: arg 1 = dalay in seconds	
 	timeout /t %1 /nobreak >nul
-	%RET%
+	%RTS%
 )
 
 :setHostUP (
 	:: responds to a request to set the hostUP variable when the host has been detected in the "Up" state.
 	set "hostUp=true"
-	%RET%
-)
-
-:setInputValid (
-	set "inputValid=%1"
-	%RET%
+	%RTS%
 )
 
 :ValidateInput (
-	:: check less than 1
-	%CMP% %hostSelection% 1
-		%JLT% :setInputValid false
-		%BLT% :ValidateInput_End
+	set "inputValid=False"
+	%BRA% :ValidateInput.Dispatcher
 
-	:: final check less than or equal to max	
-	%CMP% %hostSelection% %maxEntries%
-		%JGT% :setInputValid false
+	:ValidateInput.Dispatcher {
+		%CMP% %hostSelection% 1
+			%BLT% :ValidateInput.Exit
 
-	:ValidateInput_End
-	%RET%
+		%CMP% "%hostSelection%" "%maxEntries%"
+			%BGT% :ValidateInput.Exit
+
+		%BRA% :ValidateInput.Valid
+	}
+
+	:ValidateInput.Valid
+		set "inputValid=True"
+		%BRA% :ValidateInput.Exit
+
+	:ValidateInput.Exit
+		%RTS%
 )
 
 :setGumState (
@@ -122,7 +125,7 @@
 	set "sshPort=%3"
 
 	:checkHost_End
-	%RET%
+	%RTS%
 )
 
 :getHost (
@@ -131,7 +134,7 @@
 	for /f "tokens=1-4 delims=," %%a in (%confPath%%confFile%) do (		
 		%JSR% :checkHost %%a %%b %%c
 	)
-	%RET%
+	%RTS%
 )
 
 :getMaxEntries (
@@ -140,14 +143,14 @@
 	for /f "tokens=1-4 delims=," %%a in (%confPath%%confFile%) do (
 		set /a "maxEntries+=1"
 	)
-	%RET%
+	%RTS%
 )
 :: --- menu functions ---
 
 :showHost (
 	%INX%
 	echo %XR% - %~1
-	%RET%
+	%RTS%
 )
 
 :showHostList (
@@ -160,7 +163,7 @@
 		%JSR% :showHost "%%d"	
 	)
 	echo.
-	%RET%
+	%RTS%
 )
 
 :: --- SSH functions ---
@@ -171,14 +174,14 @@
 	gum spin --spinner dot --title "Probing Host..." -- %_sshProbeCommand%
 	%CMP% %errorlevel% 0
 		%JEQ% :setHostUP	
-	%RET%
+	%RTS%
 )
 
 :runSSH_Sub (
 	:: arg 1 = run message, arg 2 = run command
 	echo.%~1
 	%~2
-	%RET%
+	%RTS%
 )
 
 :runSSH (
@@ -187,7 +190,7 @@
 		%JEQ% :runSSH_Sub "" "ssh %sshCommand% -o LogLevel=QUIET"
 		%JNE% :runSSH_Sub "running SSH with: %sshCommand%" "ssh %sshCommand%"
 	echo.
-	%RET%
+	%RTS%
 )
 
 :: --- error logic ---
@@ -196,7 +199,7 @@
 	:: strips quotes from a passed error string and displays it.
 	echo %~1
 	echo.
-	%RET%
+	%RTS%
 )
 
 :displayError (	
@@ -212,7 +215,7 @@
 			%JEQ% :displayError_Sub "Gum not installed - winget install charmbracelet.gum"
 
 	%POPF%
-	%RET%
+	%RTS%
 )
 
 :: --- display functions ---
@@ -220,13 +223,13 @@
 :displayProgressDot (
 	:: obsolete! prints sequential dots, now replaced with the gum spinner
 	<nul set /p "=."
-	%RET%
+	%RTS%
 )
 
 :gumSleep (
 	:: dispaly pretty gum spinner for arg1 seconds
 	gum spin --spinner dot --title "sleeping" timeout /t %1
-	%RET%
+	%RTS%
 )
 
 :: -- app logic --
@@ -260,7 +263,7 @@
 	:waitForHost_Loop_End
 
 	echo.
-	%RET%
+	%RTS%
 )
 
 :: --- main function ---
