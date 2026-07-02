@@ -83,7 +83,7 @@
 			%MOV% uldr.conf.appver "v2.2.2a"
 			%MOV% uldr.conf.appPath "%~dp0"
 			%MOV% uldr.conf.stdErr "nul 2>&1"			
-			%MOV% contextAwareness False
+			%MOV% al.contextAwareness False
 
 		:: Binary Extensions			
 			%MOV% uldr.conf.iniParser "%uldr.conf.appPath%bin\iniparser.exe"		
