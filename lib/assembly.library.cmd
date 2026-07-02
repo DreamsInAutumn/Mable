@@ -292,7 +292,7 @@
 :al.ContextCheck {
 	:: test for null context pointer
 	if "%CX%" EQU "null" (
-		echo.[FATAL] Null Context Pointer Exception
+		echo.[FATAL] Null Pointer Exception - Context: %CX%
 		exit 999
 	)
 	exit /b
@@ -302,7 +302,7 @@
 :al.CMP {
 	:: Enables conditional jumps if conditions are met, else sets to a NOP command (REM).
 	
-	if "%contextAwareness%" EQU "True" (
+	if "%al.contextAwareness%" EQU "True" (
 		call :al.ContextCheck
 	)
 
