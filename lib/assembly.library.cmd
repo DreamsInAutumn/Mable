@@ -7,6 +7,8 @@
 	Macro Assembly Batch Library Extension: Mable
 	---------------------------------------------
 
+	Version 1.1.2	
+
 	A poem to our pet Mai, sometimes lovingly called Mable.
 	
 	Purpose:
@@ -50,8 +52,21 @@
 
 /*
 	ToDo:
-		1: Migrate from pushing only flags, to pushing flags and registers.
-		 - Consider versioning for %PUSH% vs %PUSHF%.		 
+		1: Flag separation
+			Migrate from pushing only flags, to pushing flags and registers separately
+			PUSH: Pushes Registers and Flags
+			PUSHF: Pushes Flags	
+
+		3: RISC - CISC
+			RISC - this wil be a pure RISC Library
+			CISC - Move FEX into a new CISC library.
+*/
+
+/*
+	Testing CX register
+		safe branching with context switching by storing the fucntion name in CX
+		PUSH POP on function entry / exit
+		use internal functions %CX%.name
 */
 
 :al.destructor {
@@ -61,26 +76,24 @@
 
 :al.exportMnemonics_v1.1 {
 
+	set "al.Initialized=True"
+
 	:: unconditional jumps
 		:: Jump to SubRoutine
 		set "JSR=call"
 
-		:: Jump FaR - used for external apps		
+		:: Jump FaR - used for external apps
 		set "JFR=start %1 %2 %3 %4"
 
 		:: probably should be: ...
 		::set "JFR=start"
 
-	:: object instantiation
-		:: instantiate object class)
-		set "IOC=call" %1 %2 %3 %4
-
 	:: termination
 		:: RETurn - from subroutine
-		set "RET=exit /b"
+		set "RET=exit /b %1"
 
 		:: Return To Sender
-		set "RTS=exit /b"
+		set "RTS=exit /b %1"
 
 	:: Flow / Sync Control
 		set "NOP=REM"
@@ -97,13 +110,20 @@
 		set "LDX=call %al.self% LDX"
 		set "LDY=call %al.self% LDY"
 
-		:: increment X Register: XR
+	:: increment X Register: XR
 		set "INX=call %al.self% INX"
 		set "INY=call %al.self% INY"
 
+	:: increment X Register: XR
+		set "DEX=call %al.self% DEX"
+		set "DEY=call %al.self% DEY"
+
+	:: Move instruction
+		set "MOV=call %al.self% MOV"
+
 	:: stack instructions
 		:: PUSH
-		set "PUSHF=call %al.self% PUSHF"	
+		set "PUSHF=call %al.self% PUSHF"
 
 		:: POP
 		set "POPF=call %al.self% POPF"
@@ -116,6 +136,7 @@
 		:: current
 		set "XR=0"
 		set "YR=0"
+		set "CX=null"
 
 		:: unused
 		set "AR=0"
@@ -126,8 +147,8 @@
 :al.exportFlags_v1.1 {
 	:: Not really flags, analogous in behavior, CMP microcode dynamically alters their behavior.
 	:: branching
-		:: unconditional BRAnch
-		set "BRA=goto"
+		:: unconditional BRAnch		
+		set "BRA=GOTO"
 
 		:: conditional: Branch if EQual
 		set "BEQ=REM"
@@ -180,6 +201,24 @@
 	exit /b
 }
 
+:: decrement X Register
+:al.DEX {
+	set /a "XR-=1"
+	exit /b
+}
+
+:: decrement Y Register
+:al.DEY {
+	set /a "YR-=1"
+	exit /b
+}
+
+:: Move %2 into %1. NOTE: %1 is named reference, and %2 is a value.
+:al.MOV {	
+	set "%~1=%~2"
+	exit /b
+}
+
 :al.FEX {
 	call set "JEQ=REM"
 	call set "JNE=REM"
@@ -215,7 +254,9 @@
 	:: push register(s)
 	call set "al.stack[%al.sp%].XR=%XR%"
 	call set "al.stack[%al.sp%].YR=%YR%"
-	
+	call set "al.stack[%al.sp%].CX=%CX%"
+	call set "CX=null"
+
 	exit /b
 }
 
@@ -240,46 +281,77 @@
 
 	:: pop register(s)
 	call set "XR=%%al.stack[%al.sp%].XR%%"
-	call set "YR=%%al.stack[%al.sp%].YR%%"
+	call set "YR=%%al.stack[%al.sp%].YR%%"	
+	call set "CX=%%al.stack[%al.sp%].CX%%"
 
 	:: decrement stack pointer
 	set /a "al.sp-=1"
 	exit /b
 }
 
-:al.CMP {
-	:: Enables conditinal jumps if conditions are met, else sets to a NOP command (REM).
-	call set "JEQ=REM"
-	call set "JNE=REM"
-	call set "JLT=REM"
-	call set "JGT=REM"
-	call set "BEQ=REM"
-	call set "BNE=REM"
-	call set "BLT=REM"
-	call set "BGT=REM"
-
-	:: if a equal b
-	if /i "%~1" EQU "%~2" (
-		call set "BEQ=goto"
-		call set "JEQ=call"
-	) else (
-		call set "BNE=goto"
-		call set "JNE=call"
+:al.ContextCheck {
+	:: test for null context pointer
+	if "%CX%" EQU "null" (
+		echo.[FATAL] Null Context Pointer Exception
+		exit 999
 	)
-
-	:: if a less than b
-	if /i "%~1" LSS "%~2" (
-		call set "BLT=goto"
-		call set "JLT=call"
-	)
-
-	:: if a greater than b
-	if /i "%~1" GTR "%~2" (
-		call set "BGT=goto"
-		call set "JGT=call"
-	)
-
 	exit /b
+}
+
+:: intentionally unrolled and linear for performance - CMP is a high-frequency function, keep literal functon calls to a minumum here.
+:al.CMP {
+	:: Enables conditional jumps if conditions are met, else sets to a NOP command (REM).
+	
+	if "%contextAwareness%" EQU "True" (
+		call :al.ContextCheck
+	)
+
+	:al.CMP.ResetBranchFlags
+		call set "JEQ=REM" & call set "JNE=REM" & call set "JLT=REM" & call set "JGT=REM" & call set "BEQ=REM" & call set "BNE=REM" & call set "BLT=REM" & call set "BGT=REM"
+
+	:al.CMP.Equal
+		:: Equality comparison is universal for string and int evaluation.
+		if /i "%~1" EQU "%~2" (
+			call set "BEQ=goto"
+			call set "JEQ=call"
+		) else (
+			call set "BNE=goto"
+			call set "JNE=call"
+		)
+
+	:: Int Guard Clause: We can not evaluate strings with less than, or greater tham comparator operations.
+	:: - Therefore: Test and bail before reaching the comparator.
+	:al.CMP.StringOrInt
+		:: Protect against empty inputs evaluating to 0
+		if "%~1"=="" goto :al.cmp.Exit
+		if "%~2"=="" goto :al.cmp.Exit
+
+		:: If a bit-shifted and non zero value is still zero, it's a string - bail
+		:: Note: Allows for singed ints, and a single CMP instruction for strings and ints.
+		set /a "al.cmp.v1=(%~1) << 1" 2>nul		
+		if "%~1" NEQ "0" if %al.cmp.v1% EQU 0 goto :al.cmp.Exit
+		set /a "al.cmp.v2=(%~2) << 1" 2>nul
+		if "%~2" NEQ "0" if %al.cmp.v2% EQU 0 goto :al.cmp.Exit
+
+	:: -- Proceede with safe integer comparisons for less and greater than and evaluations.
+	:al.CMP.Less
+		:: if a less than b
+		if %~1 LSS %~2 (
+			call set "BLT=goto"
+			call set "JLT=call"
+		)
+
+	:al.CMP.Greater
+		:: if a greater than b	
+		if %~1 GTR %~2 (
+			call set "BGT=goto"
+			call set "JGT=call"
+		)
+
+	:al.cmp.Exit
+		set "al.cmp.v1="
+		set "al.cmp.v2="
+		exit /b
 }
 
 :al.versionSelector {
@@ -313,14 +385,23 @@
 	) else if "%1" EQU "INX" (
 		call :al.INX
 
-	) else if "%1" EQU "LDX" (
-		call :al.LDX %2
-
 	) else if "%1" EQU "INY" (
 		call :al.INY
 
+	) else if "%1" EQU "DEX" (
+		call :al.DEX
+
+	) else if "%1" EQU "DEY" (
+		call :al.DEY
+
+	) else if "%1" EQU "LDX" (
+		call :al.LDX %2
+
 	) else if "%1" EQU "LDY" (
 		call :al.LDY %2
+
+	) else if "%1" EQU "MOV" (
+		call :al.MOV %2 %3
 
 	) else (
 		echo Assembly Library Import Error or bad mnemonic reference.
@@ -332,3 +413,4 @@
 }
 
 :_end
+
