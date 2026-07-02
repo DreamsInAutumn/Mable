@@ -3,7 +3,6 @@
 
 **Status:** *State of Flux / Active Sandbox*  
 **Revision:** *v1.1-WIP*  
-**Inspiration:** *A drafting table for experimental, high-performance paradigms. We keep these ideas in a state of documented play until they prove their worth in the field.*
 
 ---
 
@@ -33,13 +32,13 @@ To allow nested subroutine calls without trashing the parent’s context, the `C
 *   **`%PUSHF%`:** Pushes the caller's current `CX` value onto the stack, and clears `CX` to `null` to ensure the next subroutine starts with a clean slate.
 *   **`%POPF%`:** Pops and restores the parent's `CX` value, instantly returning the execution context to its original state upon subroutine return.
 
-If a programmer attempts to branch (`%BRA% %CX%.Exit`) before initializing `CX`, the interpreter safely traps the `null` value, throwing an explicit Null Pointer exception instead of silently wandering into dead memory.
+If a programmer attempts any type of branch after a comparison before initializing `CX`, the interpreter safely traps the `null` value, throwing an explicit Null Pointer exception instead of silently wandering into dead memory.
 
 ---
 
 ## 2. The Dynamic Memory Management Unit (`_MMU`)
 
-Environment variable bloat and global state bleed are the dual tragedies of standard command-line scripting. Mable's `_MMU` acts as a micro-device driver that gives the programmer a surgical mechanism to release memory once its lifecycle is complete.
+Environment variable bloat and global state bleed are the dual tragedies of standard command-line scripting. Mable's `_MMU` acts as a micro-device driver that releases memory once its lifecycle is complete.
 
 ### Dynamic Self-Registration (The Driver Pattern)
 To minimize logic overhead during standard execution, the MMU registers its own macro pointers in memory during the application's boot phase. Calling `_MMU` with no arguments triggers its constructor:
@@ -68,7 +67,7 @@ The underlying interpreter queries the environment block, captures all variables
 
 ---
 
-## 3. The Synergy: Implicit Context Deallocation
+## 3. Implicit Context Deallocation
 
 When we combine the `CX` register with the `_MMU`, we unlock the ultimate goal of modular architecture: **The Generic, Self-Cleaning Destructor.**
 
@@ -81,13 +80,3 @@ Because `CX` always holds the string of the currently executing function, and th
 ```
 
 This ensures that the subroutine dynamically destroys *only* its own allocated local variables, restoring the memory space of the system to a pristine state before returning control to the caller.
-
----
-
-## 4. Current State of Play
-
-We keep these paradigms in a state of active, offline testing. 
-
-While they introduce an exceptional level of structure, encapsulation, and safety, we must carefully monitor the physical parser overhead of the dynamic `set` commands and string-matches in legacy environments. 
-
-We play with these structures, we test their boundaries, and when they are hardened by real-world load-testing, we will formally merge them into the core Mable Specification.
