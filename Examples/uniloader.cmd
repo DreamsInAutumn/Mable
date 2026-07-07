@@ -1,25 +1,37 @@
 :: -- Bootstrap Function ---
 
-:_sysInit {
+:_BootStrap {
 	@echo off
 	cls
 	:: enable extended international character sets.
 	chcp 65001 > nul
 
-	:: Import external Mable Assembly Library.
-	call :_ImportCoreLib assembly.library.cmd import 1.1
+	:: Import Mable Libraries
+	call :_CoreLib assembly.library.cmd import 1.1	
+	call :_CoreLib mmu.mable.lib.cmd Singleton pULDR	
 
 	:: Jump to  main  entry point.
 	call :_main %1
+
+	:: unload Libraries	- reverse order!
+	call :_CoreLib mmu.mable.lib.cmd Destruct pULDR
+	call :_CoreLib assembly.library.cmd destruct
+
+	:: debug for checking enviromnet.
+	:: set
 	
 	:: Clean Exit, non clean exits have their own handlers, and do not reach here.
 	exit 0
 }
 
-
 /*
-	Title: Universal Application Orchestrator
-	Author (C) 2026 Autumn
+	Title: Universal Application Loader
+	Author: (C) 2026 Autumn
+	License: GPL 3
+	Kennel: https://github.com/DreamsInAutumn/Mable
+
+	Purpose:
+		Orchestrates the loading of Web apps inside stored browser applications.
 
 	Usage:
 		Create a shortcut to this script + the argument listed in the ini file to load and launch.
@@ -43,98 +55,107 @@
 		
 */
 
-:_ImportCoreLib {
-	set "uldr.LibToImport=%1"
+:: -- Core Library function
+
+:_CoreLib {
+	set "uldr.Lib=%1"
 	set "uldr.LibInit=%2"
 	set "uldr.LibVer=%3"
 
 	:: If the library exists somewhere in the environment path, store result in errorlevel
-	where %uldr.LibToImport% >nul 2>&1
+	where %uldr.Lib% >nul 2>&1
 
 	:: Test if assembly library exists,
 	if %errorlevel% EQU 0 (
-		call %uldr.LibToImport% %uldr.LibInit% %uldr.LibVer%
+		call %uldr.Lib% %uldr.LibInit% %uldr.LibVer%
 	) else (
-		echo [ Fatal ] library not found: %uldr.LibToImport% && echo.
+		echo [ Fatal ] library not found: %uldr.Lib% && echo.
 		exit 3735928559
 	)
 
-	set "uldr.LibToImport="
+	set "uldr.Lib="
 	set "uldr.LibInit="
 	set "uldr.LibVer="
 	exit /b
 }
 
-
 :: -- Initialization --
 
-:ManageNameSpace {
+:ULDR.ManageNameSpace {
+	%BRA% :ULDR.ManageNameSpace.Dispatcher
 
-	%BRA% :ManageNameSpace.Dispatcher
+	:ULDR.ManageNameSpace.Dispatcher {
+		%CMP% "%1" "Init"
+			%JEQ% :ULDR.ManageNameSpace.RegisterMethods
+			%BEQ% :ULDR.ManageNameSpace.Construct
 
-	:ManageNameSpace.Dispatcher {
-		%CMP% "%uldr.state.ManageNameSpace.Initialized%" "init.done"
-			%BEQ% :ManageNameSpace.Destruct
-			%BRA% :ManageNameSpace.Construct
+		%CMP% "%1" "Destruct"
+			%BEQ% :ULDR.ManageNameSpace.Destruct
+
+		%JSR% :ULDR.DisplayMessage "%uldr.error[0008]%"
+		exit 999
 	}
 
-	:ManageNameSpace.Construct {
+	:ULDR.ManageNameSpace.RegisterMethods	
+		%MOV% ULDR.ManageNameSpace.Done ":ULDR.ManageNameSpace Destruct"
+		%RTS%
+
+	:ULDR.ManageNameSpace.Construct {
 		:: Internal Config
-			%MOV% uldr.conf.appver "v2.2.2a"
-			%MOV% uldr.conf.appPath "%~dp0"
-			%MOV% uldr.conf.stdErr "nul 2>&1"			
-			%MOV% al.contextAwareness False
+		%MOV% uldr.config.appver "v2.2.2a"
+		%MOV% uldr.config.appPath "%~dp0"
+		%MOV% uldr.config.stdErr "nul 2>&1"
+		%MOV% al.contextAwareness False
 
 		:: Binary Extensions			
-			%MOV% uldr.conf.iniParser "%uldr.conf.appPath%bin\iniparser.exe"		
-			%MOV% uldr.conf.minResExe "%uldr.conf.appPath%bin\minres.exe"
-			%MOV% uldr.conf.splashExe "%uldr.conf.appPath%bin\splash3.exe"
-			%MOV% uldr.conf.powerShellExe "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
+		%MOV% uldr.config.iniParser "%uldr.config.appPath%bin\iniparser.exe"
+		%MOV% uldr.config.minResExe "%uldr.config.appPath%bin\minres.exe"
+		%MOV% uldr.config.splashExe "%uldr.config.appPath%bin\splash3.exe"
+		%MOV% uldr.config.powerShellExe "C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 
 		:: Configuration / IPC Files
-			%MOV% uldr.conf.iniFile "%uldr.conf.appPath%uniloader.ini"
-			%MOV% uldr.conf.splashIPCFile "splash.IPC"
+		%MOV% uldr.config.iniFile "%uldr.config.appPath%uniloader.ini"
+		%MOV% uldr.config.splashIPCFile "splash.IPC"
 
 		:: State and Initialize Function Return Values
-			%MOV% uldr.return.CheckHTTPServerUP "False"
-			%MOV% uldr.state.ManageNameSpace.Initialized "init.done"
-			%MOV% uldr.return.GetIniKV ""
-			%MOV% uldr.state.IniParser ""
-			%MOV% uldr.state.ManageMessageTable ""			
+		%MOV% uldr.return.CheckHTTPServerUP "False"			
+		%MOV% uldr.return.GetIniKV ""
+		%MOV% uldr.state.IniParser ""
+		%MOV% uldr.state.ManageMessageTable ""
 
-		%BRA% :ManageNameSpace.Exit
+		%BRA% :ULDR.ManageNameSpace.Exit
 	}
 
-	:ManageNameSpace.Destruct {
-		%_MMU.Free% uldr.conf
-		%_MMU.Free% uldr.return
-		%_MMU.Free% uldr.state
-		%BRA% :ManageNameSpace.Exit
+	:ULDR.ManageNameSpace.Destruct {
+		%JSR% %pULDR.MMU.Free% uldr.return
+		%JSR% %pULDR.MMU.Free% uldr.state		
+		%JSR% %pULDR.MMU.Free% ULDR.ManageNameSpace
+		%BRA% :ULDR.ManageNameSpace.Exit
 	}
 
-	:ManageNameSpace.Exit
+	:ULDR.ManageNameSpace.Exit
 		%RTS%
 }
 
-:ManageMessageTable {
+:ULDR.ManageMessageTable {
 	:: ** NOTE ** LowLevel error messages must be avilable before the deterministic data is ready to populate the messages in the Main section.
-	%BRA% :ManageMessageTable.Dispatcher
+	%BRA% :ULDR.ManageMessageTable.Dispatcher
 
-	:ManageMessageTable.Dispatcher {
+	:ULDR.ManageMessageTable.Dispatcher {
 		%CMP% "%uldr.state.ManageMessageTable%" "low.Done"
-			%BEQ% :ManageMessageTable.Main
+			%BEQ% :ULDR.ManageMessageTable.Main
 
 		%CMP% "%uldr.state.ManageMessageTable%" "main.Done"
-			%BEQ% :ManageMessageTable.Destruct
+			%BEQ% :ULDR.ManageMessageTable.Destruct
 
 		:: Catch no state / initial state and populate low level variables.
-		%BRA% :ManageMessageTable.LowLevel
+		%BRA% :ULDR.ManageMessageTable.LowLevel
 	}
 
 	:: Don't embed variables inside LowLevel error strings! Init sequence will prevent them being active.
-	:ManageMessageTable.LowLevel
+	:ULDR.ManageMessageTable.LowLevel
 		:: Messages
-		%MOV% uldr.msg[0000] "Universal Application Orchestrator / Loader"
+		%MOV% uldr.msg[0000] "Universal Application Loader"
 		%MOV% uldr.msg[0006] "[ INFO ] Starting Background Splash Application"
 		%MOV% uldr.msg[0007] "[ INFO ] Display Splash Screen"
 		%MOV% uldr.msg[0008] "[ INFO ] Shutdown Splash Application"
@@ -147,597 +168,626 @@
 		%MOV% uldr.error[0003] "[FATAL ] Ini file Section not found. Check shortcut argument, or Ini file section heading."
 		%MOV% uldr.error[0004] "[FATAL ] Ini file Key not found."
 		%MOV% uldr.error[0005] "[FATAL ] Ini file Parser not found."
+		%MOV% uldr.error[0006] "[FATAL ] Undefined Splash State or command."
+		%MOV% uldr.error[0007] "[FATAL ] Undefined HTTP Server Control Method."
+		%MOV% uldr.error[0008] "[FATAL ] Undefined ManageNameSpace Method."
 
 		:: Warnings		
 		%MOV% uldr.warn[0000] "[FAILED] Timed out waiting for the Application server to start."
-		%MOV% uldr.warn[0001] "[ WARN ] Gum is not installed. Install Gum with: winget install charmbracelet.gum :)..."				
+		%MOV% uldr.warn[0001] "[ WARN ] Gum is not installed. Install Gum with: winget install charmbracelet.gum :)..."
 
 		:: Set inernal state for second run to catch.
 		%MOV% uldr.state.ManageMessageTable "low.Done"
-		%BRA% :ManageMessageTable.Exit
+		%BRA% :ULDR.ManageMessageTable.Exit
 
-	:ManageMessageTable.Main
+	:ULDR.ManageMessageTable.Main
 		:: Messages		
-		%MOV% uldr.msg[0001] "[  OK  ] %uldr.extapp.appName% server is Up!"
-		%MOV% uldr.msg[0002] "[ INFO ] Starting %uldr.extapp.appName% HTTP server..."
-		%MOV% uldr.msg[0003] "[ INFO ] Launching %uldr.extapp.appName% browser app..."
-		%MOV% uldr.msg[0004] "[ INFO ] Browser opening disabled. Server available at: http://%uldr.extapp.ip%:%uldr.extapp.port%"
-		%MOV% uldr.msg[0005] "[ INFO ] Waiting for %uldr.extapp.appName% server..."
+		%MOV% uldr.msg[0001] "[  OK  ] %uldr.config.appName% server is Up!"
+		%MOV% uldr.msg[0002] "[ INFO ] Starting %uldr.config.appName% HTTP server..."
+		%MOV% uldr.msg[0003] "[ INFO ] Launching %uldr.config.appName% browser app..."
+		%MOV% uldr.msg[0004] "[ INFO ] Browser opening disabled. Server available at: http://%uldr.config.ip%:%uldr.config.port%"
+		%MOV% uldr.msg[0005] "[ INFO ] Waiting for %uldr.config.appName% server..."
 
 		:: Set inernal state for second run to catch.
 		%MOV% uldr.state.ManageMessageTable "main.Done"
-		%BRA% :ManageMessageTable.Exit
+		%BRA% :ULDR.ManageMessageTable.Exit
 
-	:ManageMessageTable.Destruct
-		%_MMU.Free% uldr.msg
-		%_MMU.Free% uldr.warn
-		%_MMU.Free% uldr.error
-		%BRA% :ManageMessageTable.Exit
+	:ULDR.ManageMessageTable.Destruct	
+		%JSR% %pULDR.MMU.Free% uldr.msg
+		%JSR% %pULDR.MMU.Free% uldr.warn
+		%JSR% %pULDR.MMU.Free% uldr.error
+		%BRA% :ULDR.ManageMessageTable.Exit
 
-	:ManageMessageTable.Exit
-		%RTS%
-}
-
-
-:: -- Memory Management
-
-:_MMU {	
-	:: Usage: arg_1 command, arg_2 memory space.
-	:: Note: free command matches partial value in arg_2, be careful.
-
-	%BRA% :_MMU.Dispatcher
-
-	:_MMU.Dispatcher {		
-		%CMP% "%1" ""
-			%BEQ% :_MMU.RegisterMethods
-		%CMP% "%1" "Free"
-			%BEQ% :_MMU.Free
-
-		%CMP% "%1" "Destruct"
-			%BEQ% :_MMU.Destruct
-
-		%BRA% :_MMU.Exit
-	}
-
-	:_MMU.RegisterMethods {
-		%MOV% _MMU.Free "%JSR% :_MMU Free %2"
-		%MOV% _MMU.Destruct "%JSR% :_MMU Destruct"
-		%BRA% :_MMU.Exit
-	}
-
-	:_MMU.Free
-		for /f "delims==" %%i in ('set %2') do (
-			set "%%i="
-		)
-		%BRA% :_MMU.Exit
-
-	:_MMU.Destruct
-		%MOV% _MMU.Free ""
-		%MOV% _MMU.Destruct ""
-		%BRA% :_MMU.Exit
-
-	:_MMU.Exit
+	:ULDR.ManageMessageTable.Exit
 		%RTS%
 }
 
 :: -- Utility Functions
 
-:Delay {
+:ULDR.Delay {
 	timeout /t %1 /nobreak > nul
 	%RTS%
 }
 
-:PauseApp {
+:ULDR.PauseApp {
 	pause
 	%RTS%
 }
 
-:Bye {
+:ULDR.Bye {
 	echo.
-	%JSR% :DisplaySpinner "À bientôt." "%uldr.userconf.exitDelay%"
-	%CMP% %uldr.userconf.debug% True
-		%JEQ% :PauseApp
+	%JSR% :ULDR.DisplaySpinner "À bientôt." "%uldr.config.exitDelay%"
+	%CMP% %uldr.config.debug% True
+		%JEQ% :ULDR.PauseApp
 
 	%RTS%
 }
 
-:DisplayWelcomeMessage {
+:ULDR.DisplayWelcomeMessage {
 	:: Keep _Main tidy (tm)
-	%JSR% :DisplayMessage "%uldr.msg[0000]% %uldr.conf.appver%" NL_Post
+	%JSR% :ULDR.DisplayMessage "%uldr.msg[0000]% %uldr.config.appver%" NL_Post
 	%RTS%
 }
 
-:MoveCursorUpNLines {
+:ULDR.MoveCursorUpNLines {
 	:: output escape sequence for cursor up with number of lines from Arg_1
 	echo [%1F
 	%RTS%
 }
 
-:CheckGumInstalled {
-	%BRA% :CheckGumInstalled.Dispatcher
+:ULDR.CheckGumInstalled {
+	%BRA% :ULDR.CheckGumInstalled.Dispatcher
 
-	:: Check if gum responds
-	:CheckGumInstalled.Dispatcher {
+	:ULDR.CheckGumInstalled.Dispatcher {
 		%CMP% "%1" "Destruct"
-			%BEQ% :CheckGumInstalled.Destruct
+			%BEQ% :ULDR.CheckGumInstalled.Destruct
 
-		%JSR% gum -v > %uldr.conf.stdErr%
-		%CMP% %errorlevel% 0
-			%BNE% :CheckGumInstalled.False
-			%BRA% :CheckGumInstalled.True
+		%JSR% :ULDR.CheckGumInstalled.CheckVer
+
+		%CMP% "%uldr.CheckGumInstalled.gumReturn%" "0"
+			%BNE% :ULDR.CheckGumInstalled.False
+			%BRA% :ULDR.CheckGumInstalled.True
 	}
 
-	:CheckGumInstalled.True
+	:ULDR.CheckGumInstalled.CheckVer
+		%MOV% uldr.CheckGumInstalled.gumReturn ""
+		:: Check if gum responds
+		%JSR% gum -v > %uldr.config.stdErr%
+		%MOV% uldr.CheckGumInstalled.gumReturn %errorlevel%
+		%RTS%
+
+	:ULDR.CheckGumInstalled.True
 		%MOV% uldr.gumInstalled "True"
-		%BRA% :CheckGumInstalled.Exit
+		%BRA% :ULDR.CheckGumInstalled.Exit
 
-	:CheckGumInstalled.False
+	:ULDR.CheckGumInstalled.False
 		%MOV% uldr.gumInstalled "False"
-		%JSR% :DisplayMessage "%uldr.warn[0001]%"
-		%BRA% :CheckGumInstalled.Exit
+		%JSR% :ULDR.DisplayMessage "%uldr.warn[0001]%"
+		%BRA% :ULDR.CheckGumInstalled.Exit
 
-	:CheckGumInstalled.Destruct
+	:ULDR.CheckGumInstalled.Destruct
+		%MOV% uldr.CheckGumInstalled.gumReturn ""
 		%MOV% uldr.gumInstalled ""
-		%BRA% :CheckGumInstalled.Exit
+		%BRA% :ULDR.CheckGumInstalled.Exit
 
-	:CheckGumInstalled.Exit
+	:ULDR.CheckGumInstalled.Exit
 		%RTS%
 }
 
-:DisplaySpinner {
-	%BRA% :DisplaySpinner.Dispatcher
+:ULDR.DisplaySpinner {
+	%BRA% :ULDR.DisplaySpinner.Dispatcher
 
-	:DisplaySpinner.Dispatcher {
+	:ULDR.DisplaySpinner.Dispatcher {
 		%CMP% "%uldr.gumInstalled%" "True"
-			%BNE% :DisplaySpinner.text
-			%BRA% :DisplaySpinner.gum
+			%BNE% :ULDR.DisplaySpinner.text
+			%BRA% :ULDR.DisplaySpinner.gum
 	}
 
-	:DisplaySpinner.Text
+	:ULDR.DisplaySpinner.Text
 		<nul set /p="."
-		%JSR% :delay %2
-		%BRA% :DisplaySpinner.Exit
+		%JSR% :ULDR.Delay %2
+		%BRA% :ULDR.DisplaySpinner.Exit
 
-	:DisplaySpinner.Gum
+	:ULDR.DisplaySpinner.Gum
 		:: dispaly pretty gum spinner for arg2 seconds with arg1 message.
 		%JSR% gum spin --spinner points --title %1 timeout /t %2
-		%BRA% :DisplaySpinner.Exit
+		%BRA% :ULDR.DisplaySpinner.Exit
 
-	:DisplaySpinner.Exit
+	:ULDR.DisplaySpinner.Exit
 		%RTS%
 }
 
-:DisplayMessage {
+:ULDR.DisplayMessage {
 	:: Displays a formatted message (arg1) with optional new line properies (arg2)
-	%BRA% :DisplayMessage.Procedure
+	%BRA% :ULDR.DisplayMessage.Procedure
 
-	:DisplayMessage.Procedure
-		%JSR% :DisplayMessage.Constructor %1 %2
-		%JSR% :DisplayMessage.Dispatcher
-		%JSR% :DisplayMessage.Destructor
+	:ULDR.DisplayMessage.Procedure
+		%JSR% :ULDR.DisplayMessage.Constructor %1 %2
+		%JSR% :ULDR.DisplayMessage.Dispatcher
+		%JSR% :ULDR.DisplayMessage.Destructor
 		%RTS%
 
-	:DisplayMessage.Constructor	
+	:ULDR.DisplayMessage.Constructor	
 		%PUSHF%				
 		%MOV% DisplayMessage.msg "%~1"
 		%MOV% DisplayMessage.nl_Position "%~2"
 		%RTS%
 
-	:DisplayMessage.Destructor
+	:ULDR.DisplayMessage.Destructor
 		%MOV% DisplayMessage.msg ""
 		%MOV% DisplayMessage.nl_Position ""
 		%POPF%
 		%RTS%
 
-	:DisplayMessage.Dispatcher {
+	:ULDR.DisplayMessage.Dispatcher {
 		:: New Line Branch Table
 		%CMP% "%DisplayMessage.nl_Position%" "NL_Pre"
-			%BEQ% :DisplayMessage.NL_Pre
+			%BEQ% :ULDR.DisplayMessage.NL_Pre
 
 		%CMP% "%DisplayMessage.nl_Position%" "NL_Post"
-			%BEQ% :DisplayMessage.NL_Post
+			%BEQ% :ULDR.DisplayMessage.NL_Post
 
 		%CMP% "%DisplayMessage.nl_Position%" "NL_Both"
-			%BEQ% :DisplayMessage.NL_Both
+			%BEQ% :ULDR.DisplayMessage.NL_Both
 
 		:: When argument is passed, don't add new lines.
-		%BRA% :DisplayMessage.NL_None
+		%BRA% :ULDR.DisplayMessage.NL_None
 	}
 
 	:: New Line Sub Functions
-	:DisplayMessage.NL_Pre
+	:ULDR.DisplayMessage.NL_Pre
 		echo.
 		echo.%DisplayMessage.msg%
 		%RTS%
 
-	:DisplayMessage.NL_Post
+	:ULDR.DisplayMessage.NL_Post
 		echo.%DisplayMessage.msg%
 		echo.
 		%RTS%
 
-	:DisplayMessage.NL_Both
+	:ULDR.DisplayMessage.NL_Both
 		echo.
 		echo.%DisplayMessage.msg%
 		echo.
 		%RTS%
 
-	:DisplayMessage.NL_None	
+	:ULDR.DisplayMessage.NL_None
 		echo.%DisplayMessage.msg%
 		%RTS%
 }
 
-
 :: -- Ini file loader functions
 
-:GetIniKV {
+:ULDR.GetIniKV {
 	:: Reads section (Arg:1) and Key (Arg:2) from a specified ini file, returns its value.
-	%BRA% :GetIniKV.Dispatcher
+	%BRA% :ULDR.GetIniKV.Dispatcher
 
-	:GetIniKV.Dispatcher {
+	:ULDR.GetIniKV.Dispatcher {
 		%CMP% "%1" "Destruct"
-			%BEQ% :GetIniKV.Destruct
+			%BEQ% :ULDR.GetIniKV.Destruct
 
 		:: check detected state of ini parser existence, branch if already set.
 		%CMP% "%uldr.state.IniParser%" "Parser_Exists"
-			%BEQ% :GetIniKV.GetVal
+			%BEQ% :ULDR.GetIniKV.GetVal
 
 		:: Check If Parser exists, set state then Get Key and Value, else show no parser fatal error message and exit.
-		%FEX% "%uldr.conf.iniParser%"
-			%JEQ% :GetIniKV.SetState
-			%BNE% :GetIniKV.NoParser
-			%BRA% :GetIniKV.GetVal
+		%FEX% "%uldr.config.iniParser%"
+			%JEQ% :ULDR.GetIniKV.SetState
+			%BNE% :ULDR.GetIniKV.NoParser
+			%BRA% :ULDR.GetIniKV.GetVal
 	}
 
-	:GetIniKV.SetState
+	:ULDR.GetIniKV.SetState
 		:: sets parser existence state, reduces filesystem load.
 		%MOV% uldr.state.IniParser "Parser_Exists"
 		%RTS%
 
-	:GetIniKV.NoParser
-		%JSR% :DisplayMessage "%uldr.error[0005]%"
-		%JSR% :Delay 5
+	:ULDR.GetIniKV.NoParser
+		%JSR% :ULDR.DisplayMessage "%uldr.error[0005]%"
+		%JSR% :ULDR.Delay 5
 		%BRK% 5
 
-	:GetIniKV.GetVal {
+	:ULDR.GetIniKV.GetVal {
 		:: Clear result before Query.
 		%MOV% uldr.return.GetIniKV ""
 		:: Call external Parser with key and value, return error level, and pipe stdout (return value) to file.
-    	%JSR% "%uldr.conf.iniParser%" "%uldr.conf.iniFile%" "%1" "%2" > "%TEMP%\uldr_ini_output.tmp"
+    	%JSR% "%uldr.config.iniParser%" "%uldr.config.iniFile%" "%1" "%2" > "%TEMP%\uldr_ini_output.tmp"
 		:: Catch stderr from ini parser.
 		%MOV% uldr.GetIniKV.iniError "%errorlevel%"
 		:: Route to error handler on missing file, missing data etc, or process and return result.
 		%CMP% %uldr.GetIniKV.iniError% 0
-			%BNE% :GetIniKV.HandleError
-			%BRA% :GetIniKV.GetReturnResult
+			%BNE% :ULDR.GetIniKV.HandleError
+			%BRA% :ULDR.GetIniKV.GetReturnResult
 	}
 
-	:GetIniKV.HandleError
+	:ULDR.GetIniKV.HandleError
 		::	Display IniParser Error, injecting error into the string wiht double %% expansion, delete IniParser temp file, break with exit code.
-		%JSR% :DisplayMessage "%%uldr.error[000%uldr.GetIniKV.iniError%]%%"
+		%JSR% :ULDR.DisplayMessage "%%uldr.error[000%uldr.GetIniKV.iniError%]%%"
 		del "%TEMP%\uldr_ini_output.tmp" 2>nul
-		%JSR% :Delay 5
+		%JSR% :ULDR.Delay 5
 		%BRK% %uldr.GetIniKV.iniError%
 	
-	:GetIniKV.GetReturnResult
-		: Read temp file output from ini parser, store value in result, delete temp file, exit.	 	
+	:ULDR.GetIniKV.GetReturnResult
+		: Read temp file output from ini parser, store value in result, delete temp file, exit.
 		set /p uldr.return.GetIniKV=<"%TEMP%\uldr_ini_output.tmp"
-		del "%TEMP%\uldr_ini_output.tmp" 2>nul		
-		%BRA% :GetIniKV.Exit
+		del "%TEMP%\uldr_ini_output.tmp" 2>nul
+		%BRA% :ULDR.GetIniKV.Exit
 
-	:GetIniKV.Destruct		
+	:ULDR.GetIniKV.Destruct
 		%MOV% uldr.GetIniKV.iniError ""
-		%BRA% :GetIniKV.Exit
+		%BRA% :ULDR.GetIniKV.Exit
 
-	:GetIniKV.Exit
+	:ULDR.GetIniKV.Exit
     	%RTS%
 }
 
-:LoadUserConfig {
-	%BRA% :LoadUserConfig.Dispatcher
+:ULDR.LoadConfig {
+	%BRA% :ULDR.LoadConfig.Dispatcher
 
-	:LoadUserConfig.Dispatcher {
-		%CMP% "%1" "Load"
-			%BEQ% :LoadUserConfig.Construct
-			%BRA% :LoadUserConfig.Destruct
+	:ULDR.LoadConfig.Dispatcher {
+		%CMP% "%1" "Destruct"
+			%BEQ% :ULDR.LoadConfig.Destruct
+		
+		%JSR% :ULDR.LoadConfig.Init %1
+		%JSR% :ULDR.LoadConfig.Loop %uldr.config.KeyArray%
+		%BRA% :ULDR.LoadConfig.Exit
 	}
 
-	:LoadUserConfig.Construct {
-		:: Loading message
-		%JSR% :DisplayMessage "%uldr.msg[0009]%"
+	:ULDR.LoadConfig.Loop {
+		%JSR% :ULDR.GetIniKV %uldr.config.LoadType% %1
+		%MOV% uldr.config.%1 "%uldr.return.GetIniKV%"
+		%SAL%
 
-		%JSR% :GetIniKV user exitDelay
-		%MOV% uldr.userconf.exitDelay "%uldr.return.GetIniKV%"
+		%CMP% "%1" ""
+			%BEQ% :ULDR.LoadConfig.LoopExit
+			%BRA% :ULDR.LoadConfig.Loop
 
-		%JSR% :GetIniKV user maxTriesHTTP
-		%MOV% uldr.userconf.maxTriesHTTP "%uldr.return.GetIniKV%"
-
-		%JSR% :GetIniKV user debug
-		%MOV% uldr.userconf.debug "%uldr.return.GetIniKV%"
-
-		%JSR% :GetIniKV user controlTerminal.state
-		%MOV% uldr.userconf.controlTerminal.state "%uldr.return.GetIniKV%"
-
-		%JSR% :GetIniKV user browserPath
-		%MOV% uldr.conf.browserPath "%uldr.return.GetIniKV%"
-
-		%BRA% :LoadUserConfig.Exit
+		:ULDR.LoadConfig.LoopExit
+			%RTS%
 	}
 
-	:LoadUserConfig.Destruct {
-		%_MMU.Free% uldr.userconf
-		%BRA% :LoadUserConfig.Exit
+	:ULDR.LoadConfig.Init {
+		%CMP% %1 user
+			%BEQ% :ULDR.LoadConfig.Init.User
+			%BRA% :ULDR.LoadConfig.Init.App
+
+		:ULDR.LoadConfig.Init.User
+			%JSR% :ULDR.DisplayMessage "%uldr.msg[0009]%"
+			%MOV% uldr.config.KeyArray "exitDelay debug hideTerminal browserPath"
+			%MOV% uldr.config.LoadType user 
+			%RTS%
+
+		:ULDR.LoadConfig.Init.App
+			%JSR% :ULDR.DisplayMessage  "%uldr.msg[0010]% %1"
+			%MOV% uldr.Config.KeyArray "appName port ip path loaderScript splashImage splashAnimationSpeed browserArgs maxTriesHTTP"
+			%MOV% uldr.config.LoadType "%1"
+			%RTS%
 	}
 
-	:LoadUserConfig.Exit
-		%RTS%
-}
-
-:LoadExternalAppConfig {	
-	%BRA% :LoadExternalAppConfig.Dispatcher
-
-	:LoadExternalAppConfig.Dispatcher {
-		%CMP% "%1" "Load"
-			%BEQ% :LoadExternalAppConfig.Construct
-			%BRA% :LoadExternalAppConfig.Destruct
+	:ULDR.LoadConfig.Destruct {
+		%JSR% %pULDR.MMU.Free% uldr.config
+		%BRA% :ULDR.LoadConfig.Exit
 	}
 
-	:LoadExternalAppConfig.Construct {
-		:: Loading message
-		%JSR% :DisplayMessage "%uldr.msg[0010]%"
-
-		:: loads: AppName, Port, IP, Path, Loader Script, Splash Image, and Browser Arguments
-		%JSR% :GetIniKV %2 AppName
-		%MOV% uldr.extapp.appName "%uldr.return.GetIniKV%"
-
-		%JSR% :GetIniKV %2 port
-		%MOV% uldr.extapp.port "%uldr.return.GetIniKV%"
-
-		%JSR% :GetIniKV %2 ip
-		%MOV% uldr.extapp.ip "%uldr.return.GetIniKV%"
-
-		%JSR% :GetIniKV %2 path
-		%MOV% uldr.extapp.path "%uldr.return.GetIniKV%"
-
-		%JSR% :GetIniKV %2 loaderScript
-		%MOV% uldr.extapp.loaderScript "%uldr.extapp.path%\%uldr.return.GetIniKV%"
-
-		%JSR% :GetIniKV %2 splashImage
-		%MOV% uldr.extapp.splashImage "%uldr.conf.appPath%%uldr.return.GetIniKV%"
-
-		%JSR% :GetIniKV %2 splashAnimationSpeed
-		%MOV% uldr.extapp.splashAnimationSpeed "%uldr.return.GetIniKV%"
-
-		%JSR% :GetIniKV %2 browserArgs
-		%MOV% uldr.extapp.browserArgs "%uldr.return.GetIniKV%"
-
-		%BRA% :LoadExternalAppConfig.Exit
-	}
-
-	:LoadExternalAppConfig.Destruct {
-		%_MMU.Free% uldr.extapp
-		%BRA% :LoadExternalAppConfig.Exit
-	}
-
-	:LoadExternalAppConfig.Exit
+	:ULDR.LoadConfig.Exit
 		%RTS%
 }
 
 :: -- Main Application Functions
 
-:ControlSplash {
+:ULDR.ControlSplash {
 	:: Controls the Splash loader display and quit routines through its IPC file.
-	%BRA% :ControlSplash.Dispatcher
+	%BRA% :ULDR.ControlSplash.Dispatcher %1
 
-	:ControlSplash.Dispatcher {
-		%CMP% %uldr.splash.State% load.Done
-			%BEQ% :ControlSplash.Display
+	:ULDR.ControlSplash.Dispatcher {
+		%CMP% "%1" "init"
+			%BEQ% :ULDR.ControlSplash.RegisterMethods
 
-		%CMP% %uldr.splash.State% display.Done
-			%BEQ% :ControlSplash.Quit
-		
-		:: Catch "no state" for default Load worker.
-		%BRA% :ControlSplash.Load
+		%CMP% "%1" "Destruct"
+			%BEQ% :ULDR.ControlSplash.Destruct
+
+		%CMP% %uldr.State.Splash% init.Done
+			%BEQ% :ULDR.ControlSplash.Load
+
+		%CMP% %uldr.State.Splash% load.Done
+			%BEQ% :ULDR.ControlSplash.Display
+
+		%CMP% %uldr.State.Splash% display.Done
+			%BEQ% :ULDR.ControlSplash.Quit
+
+		%JSR% :ULDR.DisplayMessage "%uldr.error[0006]%"
+		exit 6
 	}
 
-	:ControlSplash.Load
-		%JSR% :DisplayMessage "%uldr.msg[0006]%"
-		%JFR% /b %uldr.conf.splashExe% %uldr.extapp.splashImage% %uldr.conf.splashIPCFile% %uldr.extapp.splashAnimationSpeed%
-		%MOV% uldr.splash.State "load.Done"
-		%BRA% :ControlSplash.Exit
+	:ULDR.ControlSplash.RegisterMethods {
+		%MOV% ULDR.ControlSplash.Update ":ULDR.ControlSplash"
+		%MOV% ULDR.ControlSplash.Done ":ULDR.ControlSplash Destruct"
+		%MOV% uldr.State.Splash "init.Done"
+		%BRA% :ULDR.ControlSplash.Exit
+	}
 
-	:ControlSplash.Display
-		%JSR% :DisplayMessage "%uldr.msg[0007]%"
-		echo display > %uldr.conf.splashIPCFile%
-		%MOV% uldr.splash.State "display.Done"
-		%BRA% :ControlSplash.Exit
+	:ULDR.ControlSplash.Load
+		%JSR% :ULDR.DisplayMessage "%uldr.msg[0006]%"
+		%JFR% /b %uldr.config.splashExe% %uldr.config.appPath%\%uldr.config.splashImage% %uldr.config.appPath%\%uldr.config.splashIPCFile% %uldr.config.splashAnimationSpeed%
+		%MOV% uldr.State.Splash "load.Done"
+		%BRA% :ULDR.ControlSplash.Exit
 
-	:ControlSplash.Quit
-		%JSR% :DisplayMessage "%uldr.msg[0008]%"
-		echo quit > %uldr.conf.splashIPCFile%
-		%MOV% uldr.splash.State ""
-		%BRA% :ControlSplash.Exit
+	:ULDR.ControlSplash.Display
+		%JSR% :ULDR.DisplayMessage "%uldr.msg[0007]%"
+		echo display > %uldr.config.appPath%\%uldr.config.splashIPCFile%
+		%MOV% uldr.State.Splash "display.Done"
+		%BRA% :ULDR.ControlSplash.Exit
 
-	:ControlSplash.Exit
+	:ULDR.ControlSplash.Quit
+		%JSR% :ULDR.DisplayMessage "%uldr.msg[0008]%"
+		echo quit > %uldr.config.appPath%\%uldr.config.splashIPCFile%
+		%MOV% uldr.State.Splash "null"
+		%BRA% :ULDR.ControlSplash.Exit
+
+	:ULDR.ControlSplash.Destruct {
+		%JSR% %pULDR.MMU.Free% ULDR.ControlSplash
+		%BRA% :ULDR.ControlSplash.Exit
+	}
+
+	:ULDR.ControlSplash.Exit
 		%RTS%
 }
 
-:ControlTerminal {
-	%BRA% :ControlTerminal.FlipDispatcher
+:ULDR.ControlTerminal {
+	%BRA% :ULDR.ControlTerminal.Dispatcher
 
-	:ControlTerminal.FlipDispatcher {
+	:ULDR.ControlTerminal.Dispatcher {
+		%CMP% "%1" "Init"
+			%BEQ% :ULDR.ControlTerminal.RegisterMethods
+
+		%CMP% "%1" "Destruct"
+			%BEQ% :ULDR.ControlTerminal.Destruct
+
 		:: Exit If Disabled is set in config.
-		%CMP% "%uldr.userconf.controlTerminal.state%" "Disabled"
-			%BEQ% :ControlTerminal.Exit
+		%CMP% "%uldr.config.hideTerminal%" "Disabled"
+			%BEQ% :ULDR.ControlTerminal.Exit
 	
 		:: Flip State from Minimized to Restore
-		%CMP% "%uldr.userconf.controlTerminal.state%" "Minimized"
-			%BEQ% :ControlTerminal.Restore
+		%CMP% "%uldr.state.terminalWindow%" "Minimized"
+			%BEQ% :ULDR.ControlTerminal.Restore
 
 		:: Flip State from Restore to Minimized
-		%CMP% "%uldr.userconf.controlTerminal.state%" "Restored"
-			%BEQ% :ControlTerminal.Minimize
+		%CMP% "%uldr.state.terminalWindow%" "Restored"
+			%BEQ% :ULDR.ControlTerminal.Minimize
 		
 		:: Catch Enabled or any initialized first other state = branch to default first 
-		%BRA% :ControlTerminal.Minimize
+		%BRA% :ULDR.ControlTerminal.Minimize
 	}
 
-	:ControlTerminal.Minimize
+	:ULDR.ControlTerminal.RegisterMethods
+		%MOV% ULDR.ControlTerminal.Flip ":ULDR.ControlTerminal Flip"
+		%MOV% ULDR.ControlTerminal.Done ":ULDR.ControlTerminal Destruct"
+		%BRA% :ULDR.ControlTerminal.Exit
+
+	:ULDR.ControlTerminal.Minimize
 		:: Don't vanish in an instant like suspicious software.
-		%JSR% :Delay 2
-		%JSR% %uldr.conf.minResExe% Minimize
-		:: set "uldr.userconf.controlTerminal.state=Minimized"
-		%MOV% uldr.userconf.controlTerminal.state "Minimized"
-		%BRA% :ControlTerminal.Exit
+		%JSR% :ULDR.Delay 2
+		%JSR% %uldr.config.minResExe% Minimize
+		%MOV% uldr.state.terminalWindow "Minimized"
+		%BRA% :ULDR.ControlTerminal.Exit
 
-	:ControlTerminal.Restore
-		%JSR% %uldr.conf.minResExe% Restore
-		:: set "uldr.userconf.controlTerminal.state=Restored"
-		%MOV% uldr.userconf.controlTerminal.state "Restored"
-		%BRA% :ControlTerminal.Exit
+	:ULDR.ControlTerminal.Restore
+		%JSR% %uldr.config.minResExe% Restore
+		%MOV% uldr.state.terminalWindow "Restored"
+		%BRA% :ULDR.ControlTerminal.Exit
 
-	:ControlTerminal.Exit
+	:ULDR.ControlTerminal.Destruct
+		%JSR% %pULDR.MMU.Free% ULDR.ControlTerminal
+		%BRA% :ULDR.ControlTerminal.Exit
+
+	:ULDR.ControlTerminal.Exit
 		%RTS%
 }
 
-:StartHTTPServer {
-	%BRA% :StartHTTPServer.Start
+:ULDR.ControlHTTPServer {	
+	%BRA% :ULDR.ControlHTTPServer.Dispatcher
 
-	:StartHTTPServer.Start {
-		:: start msg, Open app in new terminal tab and return focus to our control flow tab.
-		%JSR% :DisplayMessage "%uldr.msg[0002]%"
-		%JSR% wt --window 0 -d "%uldr.extapp.path%" --title "%uldr.extapp.appName%" "%uldr.conf.powerShellExe%" "%uldr.extapp.loaderScript%"
-		%JSR% wt --window 0 focus-tab --target 0
-		%BRA% :StartHTTPServer.Exit
+	:ULDR.ControlHTTPServer.Dispatcher {
+		%CMP% "%1" "Init"
+			%BEQ% :ULDR.ControlHTTPServer.RegisterMethods
+
+		%CMP% "%1" "Start"
+			%BEQ% :ULDR.ControlHTTPServer.Start
+
+		%CMP% "%1" "Check"
+			%BEQ% :ULDR.ControlHTTPServer.CheckProcedure
+
+		%CMP% "%1" "Destruct"
+			%BEQ% :ULDR.ControlHTTPServer.Destruct
+		
+		%JSR% :ULDR.DisplayMessage "%uldr.error[0007]%"
+		exit 7
 	}
 
-	:StartHTTPServer.Exit
+	:ULDR.ControlHTTPServer.RegisterMethods {
+		%MOV% ULDR.ControlHTTPServer.Start ":ULDR.ControlHTTPServer Start"
+		%MOV% ULDR.ControlHTTPServer.Check ":ULDR.ControlHTTPServer Check"
+		%MOV% ULDR.ControlHTTPServer.Done ":ULDR.ControlHTTPServer Destruct"
+		%BRA% :ULDR.ControlHTTPServer.Exit
+	}
+
+	:ULDR.ControlHTTPServer.Start {		
+		:: start msg, Open app in new terminal tab and return focus to our control flow tab.
+		%JSR% :ULDR.DisplayMessage "%uldr.msg[0002]%"
+		%JSR% wt --window 0 -d "%uldr.config.path%" --title "%uldr.config.appName%" "%uldr.config.powerShellExe%" "%uldr.config.path%\%uldr.config.loaderScript%"		
+		%JSR% wt --window 0 focus-tab --target 0
+		%BRA% :ULDR.ControlHTTPServer.Exit
 		%RTS%
-}
+	}
 
-:CheckHTTPServerUP {
-	%BRA% :CheckHTTPServerUP.Procedure
+	:ULDR.ControlHTTPServer.CheckProcedure {
+		%JSR% :ULDR.DisplayMessage "%uldr.msg[0005]%"
+		%JSR% :ULDR.ControlHTTPServer.PrepLoop
+		%JSR% :ULDR.ControlHTTPServer.RunLoop
+		%JSR% :ULDR.ControlHTTPServer.ExitLoop
+		%BRA% :ULDR.ControlHTTPServer.Exit
+	}
 
-	:CheckHTTPServerUP.Procedure
-		%JSR% :DisplayMessage "%uldr.msg[0005]%"			:: Show server wait message.
-		%JSR% :CheckHTTPServerUP.Construct					:: Assign default fail retrun, store flags and set loop counter to 0
-		%JSR% :CheckHTTPServerUP.Loop						:: Main HTTP server probe loop
-		%JSR% :CheckHTTPServerUP.Destruct					:: Resstore CPU flags and registers.
-		%RTS%						 						:: Return to Caller. Class Dismissed 🎓
-
-	:CheckHTTPServerUP.Construct
+	:ULDR.ControlHTTPServer.PrepLoop {
+		:: Assign default fail return, store flags and set loop counter to 0
 		%MOV% uldr.return.CheckHTTPServerUP "False"
 		%PUSHF%
-		%LDX% %uldr.userconf.maxTriesHTTP%
+		%LDX% %uldr.config.maxTriesHTTP%
 		%RTS%
+	}
 
-	:CheckHTTPServerUP.Destruct
+	:ULDR.ControlHTTPServer.RunLoop {
+		%JSR% :ULDR.DisplaySpinner "Probing Host: %uldr.config.ip%:%uldr.config.port%..." "2"
+		:: Silently probe HTTP server and test stderr		
+		%JSR% curl -s -o nul -I -f --max-time 1 http://%uldr.config.ip%:%uldr.config.port%
+		%CMP% %errorlevel% 0
+			%BNE% :ULDR.ControlHTTPServer.CheckMaxTries
+			%BRA% :ULDR.ControlHTTPServer.IsUp
+
+		:ULDR.ControlHTTPServer.MaxTriesExceeded
+			%CMP% %uldr.gumInstalled% "False"
+				%JEQ% :ULDR.MoveCursorUpNLines 1
+
+			%JSR% :ULDR.DisplayMessage "%uldr.warn[0000]%"
+			%RTS%
+
+		:ULDR.ControlHTTPServer.IsUp
+			%MOV% uldr.return.CheckHTTPServerUP "True"
+			%CMP% %uldr.gumInstalled% "False"
+				%JEQ% :ULDR.MoveCursorUpNLines 1
+
+			%JSR% :ULDR.DisplayMessage "%uldr.msg[0001]%"
+			%RTS%
+
+		:ULDR.ControlHTTPServer.CheckMaxTries
+			%DEX%
+			%JSR% :ULDR.DisplaySpinner "Retries Remaining: %XR%..." "4"
+			%CMP% %XR% 0
+				%BEQ% :ULDR.ControlHTTPServer.MaxTriesExceeded
+				%BRA% :ULDR.ControlHTTPServer.RunLoop
+	}
+
+	:ULDR.ControlHTTPServer.ExitLoop
 		%POPF%
 		%RTS%
 
-	:CheckHTTPServerUP.Loop {
-		%JSR% :DisplaySpinner "Probing Host: %uldr.extapp.ip%:%uldr.extapp.port%..." "2"
-		:: Silently probe HTTP server and test stderr
-		%JSR% curl -s -o nul -I -f --max-time 1 http://%uldr.extapp.ip%:%uldr.extapp.port%
-		%CMP% %errorlevel% 0
-			%BNE% :CheckHTTPServerUP.CheckMaxTries
-			%BRA% :CheckHTTPServerUP.IsUp
+	:ULDR.ControlHTTPServer.Destruct		
+		%JSR% %pULDR.MMU.Free% ULDR.ControlHTTPServer		
+		%BRA% :ULDR.ControlHTTPServer.Exit
 
-		:CheckHTTPServerUP.MaxTriesExceeded
-			%CMP% %uldr.gumInstalled% "False"
-				%JEQ% :MoveCursorUpNLines 1
-
-			%JSR% :DisplayMessage "%uldr.warn[0000]%"
-			%RTS%
-
-		:CheckHTTPServerUP.IsUp
-			%MOV% uldr.return.CheckHTTPServerUP "True"
-			%CMP% %uldr.gumInstalled% "False"
-				%JEQ% :MoveCursorUpNLines 1
-
-			%JSR% :DisplayMessage "%uldr.msg[0001]%"
-			%RTS%
-
-		:CheckHTTPServerUP.CheckMaxTries
-			%DEX%
-			%JSR% :DisplaySpinner "Retries Remaining: %XR%..." "4"
-			%CMP% %XR% 0
-				%BEQ% :CheckHTTPServerUP.MaxTriesExceeded
-				%BRA% :CheckHTTPServerUP.Loop
-	}
+	:ULDR.ControlHTTPServer.Exit
+		%RTS%
 }
 
-:LaunchBrowser {
-	%BRA% :LaunchBrowser.BailDispatcher
+:ULDR.LaunchBrowser {
+	%BRA% :ULDR.LaunchBrowser.Dispatcher
 
-	 :LaunchBrowser.BailDispatcher {
+	:ULDR.LaunchBrowser.Dispatcher {
+		%CMP% "%1" "Init"
+			%BEQ% :ULDR.LaunchBrowser.RegisterMethods
+
+		%CMP% "%1" "Destruct"
+			%BEQ% :ULDR.LaunchBrowser.Destruct
+
 		:: Skip browser if skip debug variable set to true.
-	 	%CMP% "%uldr.userconf.debug%" "True"
-			%BEQ% :LaunchBrowser.Skip
+	 	%CMP% "%uldr.config.debug%" "True"
+			%BEQ% :ULDR.LaunchBrowser.Skip
 
 		:: Exit if Server is not running,
 		%CMP% %uldr.return.CheckHTTPServerUP% True
-			%BEQ% :LaunchBrowser.Launch
-			%BRA% :LaunchBrowser.Exit
-	 }
+			%BEQ% :ULDR.LaunchBrowser.Launch
 
-	:LaunchBrowser.Skip
+		:: Catch, maybe trap with error.
+		%BRA% :ULDR.LaunchBrowser.Exit
+	}
+
+	:ULDR.LaunchBrowser.RegisterMethods {
+		%MOV% ULDR.LaunchBrowser.Do ":ULDR.LaunchBrowser Do"
+		%MOV% ULDR.LaunchBrowser.Done ":ULDR.LaunchBrowser Destruct"
+		%BRA% :ULDR.LaunchBrowser.Exit
+	}
+
+	:ULDR.LaunchBrowser.Skip
 		:: Browser skip msg.
-		%JSR% :DisplayMessage "%uldr.msg[0004]%"
-		%BRA% :LaunchBrowser.Exit
+		%JSR% :ULDR.DisplayMessage "%uldr.msg[0004]%"
+		%BRA% :ULDR.LaunchBrowser.Exit
 
-	:LaunchBrowser.Launch {
+	:ULDR.LaunchBrowser.Launch {
 		:: Launch Message.	
-		%JSR% :DisplayMessage "%uldr.msg[0003]%"	
+		%JSR% :ULDR.DisplayMessage "%uldr.msg[0003]%"
 
 		:: Launch Browser App with app profile.
-		%JFR% "%uldr.extapp.appName%" "%uldr.conf.browserPath%" %uldr.extapp.browserArgs%
-		%BRA% :LaunchBrowser.Exit
+		%JFR% "%uldr.config.appName%" "%uldr.config.browserPath%" %uldr.config.browserArgs%
+		%BRA% :ULDR.LaunchBrowser.Exit
+	}
+
+	:ULDR.LaunchBrowser.Destruct {
+		%JSR% %pULDR.MMU.Free% ULDR.LaunchBrowser
+		%BRA% :ULDR.LaunchBrowser.Exit
 	}
 	
-	:LaunchBrowser.Exit
+	:ULDR.LaunchBrowser.Exit
 		%RTS%
 }
 
 :: -- Main Procedural Function
 
-:_main {
-	%JSR% :_MMU
-	%JSR% :ManageNameSpace					:: Construct namespace variables.
-	%JSR% :ManageMessageTable				:: First call Initializes Low Level message strings.
-	%JSR% :DisplayWelcomeMessage			:: ...
+:_Main {
+	:_Main.Procedure {
+		%JSR% :_Main.Init
+		%JSR% :ULDR.DisplayWelcomeMessage
+		%JSR% :_Main.Configuration %1
+		%JSR% :_Main.Orchestration
+		%JSR% :ULDR.Bye
+		%JSR% :_Main.DeallocateMemory
+		%RTS%
+	}
 
-	:: Main Initialization
-	%JSR% :CheckGumInstalled				:: Sets Gum spinner installation state - we fall back to dots if not.
-	%JSR% :LoadUserConfig Load				:: Loads user configuration data from the ini file.
-	%JSR% :LoadExternalAppConfig Load %1	:: Load configuration variables for specific external HTTP Application.	
-	%JSR% :ManageMessageTable				:: Second call configures message strings that are dependent on base application initialization.
+	:_Main.Init {
+		:: Build namespace object, build first stage message array.
+		%JSR% :ULDR.ManageNameSpace Init
+		%JSR% :ULDR.ManageMessageTable
+		%JSR% :ULDR.ControlSplash Init		
+		%JSR% :ULDR.ControlHTTPServer Init
+		%JSR% :ULDR.ControlTerminal Init
+		%JSR% :ULDR.LaunchBrowser Init
+		%RTS%
+	}
 
-	:: Staging
-	%JSR% :ControlSplash					:: Splash state transition: Loads splash image application in the background, waits for IPC commands.
-	%JSR% :StartHTTPServer					:: Start HTTP Server for AI Application.
-	%JSR% :ControlSplash					:: Splash state transition: Sends Display IPC Command to the Splash Application.
-	%JSR% :ControlTerminal					:: Terminal State transition: Minimize Terminal.
-	%JSR% :CheckHTTPServerUP				:: Check if server is up (loop with max).
+	:_Main.Configuration {
+		:: General configuration, pulls in variables from the ini file, builds second stage message array
+		%JSR% :ULDR.CheckGumInstalled
+		%JSR% :ULDR.LoadConfig user
+		%JSR% :ULDR.LoadConfig %1
+		%JSR% :ULDR.ManageMessageTable
+		%RTS%
+	}
 
-	:: Exit Prep
-	%JSR% :ControlTerminal					:: Terminal State transition: Restore Terminal
-	%JSR% :ControlSplash					:: Splash state transition: Sends Quit IPC Command to the Splash Application.
+	:_Main.Orchestration {
+		:: Perform actions: [Terminal: Flip Minimize <> Restore], [Splash State: load >> Display >> Quit]
+		%JSR% %ULDR.ControlSplash.Update%
+		%JSR% %ULDR.ControlHTTPServer.Start%
+		%JSR% %ULDR.ControlSplash.Update%
+		%JSR% %ULDR.ControlTerminal.Flip%
+		%JSR% %ULDR.ControlHTTPServer.Check%
+		%JSR% %ULDR.ControlTerminal.Flip%
+		%JSR% %ULDR.ControlSplash.Update%
+		%JSR% %ULDR.LaunchBrowser.Do%
+		%RTS%
+	}
 
-	:: Finale
-	%JSR% :LaunchBrowser					:: Launch Browser Application, Displays Browser IP/URL if Disabled in config.
-	%JSR% :Bye								:: Wave.
-
-	:: Deallocate Memory
-	%JSR% :LoadUserConfig Destruct			:: Destroy UserConfig variables.
-	%JSR% :LoadExternalAppConfig Destruct 	:: Destroy External App config variables.
-	%JSR% :GetIniKV Destruct				:: Destroy 'scoped' variables for KV eval.
-	%JSR% :ManageMessageTable				:: Destroy Message Table variables.
-	%JSR% :ManageNameSpace Destruct			:: Destroy Namespace variables.
-	%JSR% :CheckGumInstalled Destruct		:: Destroy Gum Namespace variables.
-
-	%_MMU.Destruct%
-
-	%RTS%
+	:_Main.DeallocateMemory {
+		%JSR% %ULDR.ControlSplash.Done%		
+		%JSR% %ULDR.ControlHTTPServer.Done%
+		%JSR% %ULDR.ControlTerminal.Done%		
+		%JSR% %ULDR.LaunchBrowser.Done%		
+		%JSR% :ULDR.GetIniKV Destruct
+		%JSR% :ULDR.CheckGumInstalled Destruct
+		%JSR% :ULDR.LoadConfig Destruct		
+		%JSR% :ULDR.ManageMessageTable
+		%JSR% %ULDR.ManageNameSpace.Done%
+		%RTS%
+	}
 }
 
 :: -- The End
