@@ -7,44 +7,46 @@
 	Macro Assembly Batch Library Extension: Mable
 	---------------------------------------------
 
-	Version 1.1.2	
+	Version 1.1.4
 
-	A poem to our pet Mai, sometimes lovingly called Mable.
+	An Programming art project in loving memory of our pug Mai (and Chi), sometimes lovingly called Mable.
 	
 	Purpose:
-		Provide programmatic structure through an assembly-like Mnemonics to suggest Single Responsibility Principles.
+		Provide programmatic structure through assembly-like Pseudo Mnemonics that suggest flat, un-nested functions and Single
+		Responsibility Principles.
 
 	Intent and usage:
-		The majority of Batch code is written in a catastrophically idiomatic style promoted by Microsoft themselves.
-	(Go look at a DOS 5 manual, or Microsoft's 'Learn' Library for proof.)
+		The majority of Batch code is written in a catastrophic style promoted by Microsoft themselves.
+		Go look at a DOS 5 manual, or Microsoft's 'Learn' Library for evidence!
 
-		Avoid: Using setlocal / endlocal and enabledelayedexpansion hell
-		Use: The CMP comparator instead and then branch / jump. 
-		Use: scoped variables
-			local function.var, function.return - clean up as you go.
-			global applicationname.var
+	Avoid:
+		Setlocal / Endlocal and EenableDelayedExpansion. It will steer batch into this: "!%%%%%var%%%%%!" hell.
 
-		CMP is itself is translated to a single nest, and then leaves keeping your code a simple flat never-nester heaven.
-	
-	For someone familiar with structured programming, and with a basic understanding of Assembly language: The provided
-	examples show that by following organized principles, Batch scripts can have clear structure and explicit conditional logic.
-	Batch can do it without	pseudo Assembly, of course... Yet people don't, they write tangled spaghettified tragedies.
+	Pinciples:
+		For someone familiar with structured programming, and with a basic understanding of Assembly language: The provided
+		examples show that by following organized principles, Batch scripts can have clear structure and explicit conditional logic.
+		Batch can do it without	pseudo Assembly, of course... Yet people don't, they write tangled spaghettified tragedies.
 	
 	Thought consideration:
 		When writing production-ready and maintainable code in assembly for archaic CPU's such as a 6502; an Assembly style
-	pushes you harder to think in structured methodologies such as sub routines, unrolling nesting as much as possible (unless
-	optimizing for performance), or the code quickly dissolves into chaos.
+		pushes you harder to think in structured methodologies such as sub routines, unrolling nesting as much as possible (unless
+		optimizing for performance), or the code quickly dissolves into chaos.
 
-	Desirable Coding Style
-		1. Use single responsibility functions where possible.
+	Desirable Coding Style:
+		1. Use single responsibility functions.
 		2. The use of "Happy Path" stateful branching is encouraged.
+		4. Unroll functions, releated subroutines if you prefer, or worker threads in a grouped object if you prefer.
+		5. Dispatching and branching: Use the CMP comparator heavily to route to simple workers.
 
 	Contrivancy:
 		Admittedly going down the path of stylistically using macro assembly principles for architecting system scripting
-	could appear as excessive to some. If, however think about Batch code inside the scope of the application and not the
-	library, resultant programs become easier to read and maintain when the principles are adhered to.
+		could appear as excessive to some. If, however think about Batch code inside the scope of the application and not the
+		library, resultant programs become easier to read and maintain when the principles are adhered to.
 		Introducing branching via enhancing goto with conditions in a high level language may feel like a step backward. I
-	counter that by asking that you apply the logical flow that macro assembly uses.
+		counter that by asking that you apply the logical flow that macro assembly uses.
+
+	Parentheses Styling Notes:
+		Technically invalid, however your code should never execute them, always use some form of branch or jump before closing.
 	
 	Hope:
 		My hope is that there will be fewer Batch tragedies.
@@ -63,13 +65,18 @@
 */
 
 /*
-	Testing CX register
-		safe branching with context switching by storing the fucntion name in CX
-		PUSH POP on function entry / exit
-		use internal functions %CX%.name
+	Testing:
+	
+		CX Register
+			safe branching with context switching by storing the fucntion name in CX
+			PUSH POP on function entry / exit
+			use internal functions %CX%.name
+
+		RX Register
+			Return register unaffected by the stack.
 */
 
-:al.destructor {
+:al.destructLocal {
 	set "al.self="
 	exit /b
 }
@@ -103,8 +110,12 @@
 		:: CoMPare
 		set "CMP=call %al.self% CMP"
 
-		:: if File EXist
+	:: CISC Functions - on refactor move ot a CISC Lib belongs 
 		set "FEX=call %al.self% FEX"
+
+	:: Shift Functions
+		:: Shifts Arguments left %1 %2 etc.
+		set "SAL=shift"
 
 	:: register manipulation
 		set "LDX=call %al.self% LDX"
@@ -364,11 +375,38 @@
 	exit /b
 }
 
+:al.destruct_sub {
+	for %%i in (%*) do (
+		set "%%i="
+	)
+	exit /b
+}
+
+:al.destruct_stack {
+	for /f "delims==" %%i in ('set %1') do (
+		set "%%i="
+	)
+	exit /b
+}
+
+:al.destruct {
+	call :al.destruct_sub BRA BEQ BNE BLT BGT JEQ JNE JLT JGT JFR JSR
+	call :al.destruct_sub CMP FEX
+	call :al.destruct_sub al.sp al.self al.contextAwareness al.Initialized
+	call :al.destruct_sub XR YR AR CX
+	call :al.destruct_sub RET RTS NOP BRK SAL LDX LDY INX INY DEX DEY MOV PUSHF POPF
+	call :al.destruct_stack al.stack
+	exit /b
+}
+
 :_main {
 	:: test the first passed argument, if = "import", initialize CPU states
 	:: - else check if we are testing specific mnemonics, and call their code
 	if "%1" EQU "import" (
 		call :al.versionSelector %2
+
+	) else if "%1" EQU "destruct" (
+		call :al.destruct
 
 	) else if "%1" EQU "CMP" (
 	    call :al.CMP %2 %3
@@ -408,7 +446,7 @@
 		pause
 	)
 
-	call :al.destructor
+	call :al.destructLocal
 	goto :_end
 }
 
