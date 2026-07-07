@@ -13,6 +13,8 @@
     Author: (C) Autumn 2026
     License: GPL 3
     Kennel: https://github.com/DreamsInAutumn/Mable
+
+    Note: MMU is delegated as a singleton, there should only be one.
 */
 
 /*
@@ -21,7 +23,7 @@
         Try to keep the list simple, there may be ways of having such a list wihtout building one from scratch.
 */
 
-:_Class.MableMMU {    
+:_Class.MableMMU {
     %BRA% :_Class.MableMMU.Dispatcher
 
     :_Class.MableMMU.Dispatcher {
@@ -38,11 +40,9 @@
             %BEQ% :_Mable.MMU.Destruct
 
         %BRA% :_Mable.MMU.UnsupportedInstruction
-
-	    %RTS%
     }
 
-    :_Mable.MMU.exportMethods {        
+    :_Mable.MMU.exportMethods {
         %CMP% %_MableMMU.Initialized% "True"
             %JEQ% :_Mable.MMU.MultipleInstanceAttempt
 
@@ -54,14 +54,14 @@
         %BRA% :_Class.MableMMU.Exit
     }
 
-    :_Mable.MMU.Free {        
-        for /f "delims==" %%i in ('set %2') do (            
+    :_Mable.MMU.Free {
+        for /f "delims==" %%i in ('set %2') do (
             set "%%i="
 	    )
         %BRA% :_Class.MableMMU.Exit
     }
 
-    :_Mable.MMU.Destruct {        
+    :_Mable.MMU.Destruct {
         %MOV% %2.MMU.Destruct ""
         %MOV% %2.MMU.Free ""
         %MOV% _MableMMU.Initialized
@@ -74,13 +74,11 @@
     }
 
     :_Mable.MMU.MultipleInstanceAttempt {
-        :: Enforce singleton.
         echo [Fatal ] MMU Does not support multiple instances.
         exit 999
     }
 
     :_Mable.MMU.UnsupportedInstruction {
-        :: Enforce singleton.
         echo [Fatal ] Unsupported MMU Instruction.
         exit 999
     }
